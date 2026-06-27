@@ -2,8 +2,8 @@
 
 #include "logging.h"
 
-#include <KnownFolders.h>
 #include <Windows.h>
+#include <KnownFolders.h>
 #include <shlobj.h>
 
 #include <cwchar>
