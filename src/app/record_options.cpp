@@ -2,7 +2,9 @@
 
 #include "logging.h"
 
+#include <KnownFolders.h>
 #include <Windows.h>
+#include <shlobj.h>
 
 #include <cwchar>
 #include <iomanip>
@@ -26,12 +28,7 @@ std::wstring resolveOutputDir(const std::wstring &dir) {
   if (!dir.empty()) {
     return dir;
   }
-  wchar_t cwd[MAX_PATH]{};
-  const DWORD n = GetCurrentDirectoryW(MAX_PATH, cwd);
-  if (n == 0 || n >= MAX_PATH) {
-    return L".";
-  }
-  return cwd;
+  return defaultOutputDir();
 }
 
 std::wstring joinPath(const std::wstring &dir, const std::wstring &file) {
@@ -77,6 +74,23 @@ Status ensureDirectoryExists(const std::wstring &dir) {
 
 } // namespace
 
+std::wstring defaultOutputDir() {
+  PWSTR path = nullptr;
+  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Videos, KF_FLAG_DEFAULT, nullptr,
+                                     &path)) &&
+      path != nullptr) {
+    std::wstring result(path);
+    CoTaskMemFree(path);
+    return result;
+  }
+  wchar_t home[MAX_PATH]{};
+  const DWORD n = GetEnvironmentVariableW(L"USERPROFILE", home, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) {
+    return L"Videos";
+  }
+  return std::wstring(home) + L"\\Videos";
+}
+
 Result<PresetValues> presetValues(const std::wstring &name) {
   if (equalsIgnoreCase(name, L"low")) {
     return Result<PresetValues>::ok({24, 2'000'000});
@@ -114,28 +128,23 @@ void applyRecordPreset(RecordOptions &options) {
 
 Result<std::wstring> resolveRecordOutputPath(const RecordOptions &options) {
   const std::wstring dir = resolveOutputDir(options.outputDir);
-  const bool customDir = !options.outputDir.empty();
 
   if (options.outputPath.empty()) {
-    if (customDir) {
-      if (const auto st = ensureDirectoryExists(dir); !st.isOk()) {
-        return Result<std::wstring>::fail(st.error());
-      }
+    if (const auto st = ensureDirectoryExists(dir); !st.isOk()) {
+      return Result<std::wstring>::fail(st.error());
     }
     return Result<std::wstring>::ok(joinPath(dir, makeAutoOutputName()));
   }
 
   std::wstring path = options.outputPath;
-  if (customDir && !isAbsolutePath(path)) {
+  if (!isAbsolutePath(path)) {
     path = joinPath(dir, path);
   }
-  if (customDir) {
-    const size_t pos = path.find_last_of(L"\\/");
-    const std::wstring parent =
-        pos != std::wstring::npos ? path.substr(0, pos) : dir;
-    if (const auto st = ensureDirectoryExists(parent); !st.isOk()) {
-      return Result<std::wstring>::fail(st.error());
-    }
+  const size_t pos = path.find_last_of(L"\\/");
+  const std::wstring parent =
+      pos != std::wstring::npos ? path.substr(0, pos) : dir;
+  if (const auto st = ensureDirectoryExists(parent); !st.isOk()) {
+    return Result<std::wstring>::fail(st.error());
   }
   return Result<std::wstring>::ok(std::move(path));
 }

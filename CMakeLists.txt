@@ -20,22 +20,29 @@ endif()
 
 add_executable(wrec
     src/main.cpp
-    src/cli.cpp
-    src/window_list.cpp
-    src/hotkeys.cpp
-    src/recorder.cpp
-    src/capture_wgc.cpp
-    src/capture_printwindow.cpp
-    src/d3d_device.cpp
-    src/cursor_overlay.cpp
-    src/mf_encoder.cpp
-    src/logging.cpp
-    src/path_install.cpp
-    src/record_options.cpp
-    src/gui.cpp
+    src/app/cli.cpp
+    src/app/gui.cpp
+    src/app/path_install.cpp
+    src/app/record_options.cpp
+    src/core/logging.cpp
+    src/core/notification.cpp
+    src/capture/window_list.cpp
+    src/capture/capture_wgc.cpp
+    src/capture/capture_printwindow.cpp
+    src/capture/d3d_device.cpp
+    src/capture/cursor_overlay.cpp
+    src/record/hotkeys.cpp
+    src/record/recorder.cpp
+    src/record/mf_encoder.cpp
 )
 
-target_include_directories(wrec PRIVATE src)
+target_include_directories(wrec PRIVATE
+    src
+    src/app
+    src/core
+    src/capture
+    src/record
+)
 
 target_link_libraries(wrec PRIVATE
     windowsapp

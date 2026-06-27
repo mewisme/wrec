@@ -7,6 +7,7 @@
 #include "hotkeys.h"
 #include "logging.h"
 #include "mf_encoder.h"
+#include "notification.h"
 #include "window_list.h"
 
 #include <atomic>
@@ -14,7 +15,6 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
-
 
 namespace {
 
@@ -155,7 +155,9 @@ Status runRecorder(const RecordOptions &options,
           nextFrameTime = recordStart;
           logMessage(LogLevel::Info, "Recording started");
           logJsonEvent("recording");
+          notifyTrayBalloon(L"wrec", L"Recording started");
         } else {
+          notifyTrayBalloon(L"wrec", L"Recording stopped");
           running = false;
         }
         break;
@@ -165,15 +167,18 @@ Status runRecorder(const RecordOptions &options,
           pauseStarted = Clock::now();
           logMessage(LogLevel::Info, "Paused");
           logJsonEvent("paused");
+          notifyTrayBalloon(L"wrec", L"Paused");
         } else if (state == RecorderState::Paused) {
           totalPaused += Clock::now() - pauseStarted;
           state = RecorderState::Recording;
           nextFrameTime = Clock::now();
           logMessage(LogLevel::Info, "Resumed");
           logJsonEvent("resumed");
+          notifyTrayBalloon(L"wrec", L"Resumed");
         }
         break;
       case HotkeyAction::Quit:
+        notifyTrayBalloon(L"wrec", L"Recording stopped");
         running = false;
         break;
       default:

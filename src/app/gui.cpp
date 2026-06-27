@@ -528,6 +528,7 @@ void createChildControls(HWND hwnd) {
 
   createLabel(hwnd, L"Output dir:", margin, px(252), px(84), px(18));
   createEdit(hwnd, IDC_OUTPUT_DIR, px(92), px(248), editW, px(24));
+  setWindowText(GetDlgItem(hwnd, IDC_OUTPUT_DIR), defaultOutputDir());
   createButton(hwnd, IDC_BROWSE_DIR, L"Browse...", margin + px(92) + editW,
                px(246), browseW, px(26));
 

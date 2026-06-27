@@ -90,7 +90,7 @@ Output:
 
 ```powershell
 wrec r -t "Notepad" -o demo.mp4        # explicit file
-wrec r -t "Notepad"                    # auto: wrec-YYYYMMDD-HHMMSS.mp4 (cwd)
+wrec r -t "Notepad"                    # auto: %USERPROFILE%\Videos\wrec-YYYYMMDD-HHMMSS.mp4
 wrec r -t "Notepad" -d D:\captures     # auto name in folder
 wrec r -t "Notepad" -o clip.mp4 -d D:\captures   # D:\captures\clip.mp4
 ```
@@ -120,7 +120,7 @@ wrec r -t "Notepad" --preset ultra -f 30   # 30 fps, 8 Mbps bitrate
 | `-p` | `--pid` | — | Target process ID |
 | `-t` | `--title` | — | Partial window title match |
 | `-o` | `--out` | auto | Output MP4 path |
-| `-d` | `--output-dir` | cwd | Folder for `-o` or auto-named file |
+| `-d` | `--output-dir` | `%USERPROFILE%\Videos` | Folder for `-o` or auto-named file |
 | — | `--preset` | medium | `low` … `extreme` |
 | `-f` | `--fps` | preset | Frame rate (overrides preset) |
 | `-b` | `--bitrate` | preset | Bitrate in bps (overrides preset) |
@@ -139,6 +139,8 @@ wrec r -t "Notepad" --preset ultra -f 30   # 30 fps, 8 Mbps bitrate
 | Ctrl+Alt+S | Stop and finalize (or **start** if `--start-paused`) |
 | Ctrl+Alt+P | Pause / resume |
 | Ctrl+Alt+Q | Quit and finalize |
+
+Each hotkey shows a brief tray balloon notification (CLI or GUI).
 
 ### Examples
 
@@ -210,21 +212,26 @@ Tags must start with `v`. The zip contains `wrec.exe`, README, LICENSE, and `scr
 
 ```
 src/
-  main.cpp              Entry, DPI, WinRT apartment
-  cli.cpp               Argument parsing
-  gui.cpp               Win32 GUI
-  record_options.cpp    Presets, output path resolution
-  window_list.cpp       EnumWindows, target resolution
-  capture_wgc.cpp       Windows Graphics Capture
-  capture_printwindow.cpp   Occluded-window fallback
-  d3d_device.cpp        D3D11 staging, scale/copy
-  cursor_overlay.cpp    Cursor alpha-blend
-  mf_encoder.cpp        H.264 MP4 encoder
-  hotkeys.cpp           Ctrl+Alt+S/P/Q
-  recorder.cpp          Session orchestration
-  path_install.cpp      install / uninstall
-  logging.cpp           Logging, UTF-8 console
-  result.h              Result<T>, Status
+  main.cpp                 Entry, DPI, WinRT apartment
+  app/                     CLI, GUI, install, record options
+    cli.cpp                Argument parsing, command dispatch
+    gui.cpp                Win32 GUI
+    record_options.cpp     Presets, output path resolution
+    path_install.cpp       install / uninstall
+  core/                    Shared utilities
+    result.h               Result<T>, Status
+    logging.cpp            Logging, UTF-8 console
+    notification.cpp       Tray balloon on hotkey actions
+  capture/                 Window discovery and frame capture
+    window_list.cpp        EnumWindows, target resolution
+    capture_wgc.cpp        Windows Graphics Capture
+    capture_printwindow.cpp   Occluded-window fallback
+    d3d_device.cpp         D3D11 staging, scale/copy
+    cursor_overlay.cpp     Cursor alpha-blend
+  record/                  Encode session
+    recorder.cpp           Session orchestration
+    hotkeys.cpp            Ctrl+Alt+S/P/Q
+    mf_encoder.cpp         H.264 MP4 encoder
 ```
 
 ## License

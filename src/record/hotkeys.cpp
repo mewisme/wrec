@@ -33,21 +33,17 @@ void HotkeyManager::unregisterAll() {
 
 HotkeyAction HotkeyManager::pollAction() {
   MSG msg{};
-  while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-    if (msg.message == WM_HOTKEY) {
-      switch (static_cast<int>(msg.wParam)) {
-      case HOTKEY_STOP:
-        return HotkeyAction::StopOrStart;
-      case HOTKEY_PAUSE:
-        return HotkeyAction::PauseToggle;
-      case HOTKEY_QUIT:
-        return HotkeyAction::Quit;
-      default:
-        break;
-      }
-    }
-    TranslateMessage(&msg);
-    DispatchMessageW(&msg);
+  if (!PeekMessageW(&msg, nullptr, WM_HOTKEY, WM_HOTKEY, PM_REMOVE)) {
+    return HotkeyAction::None;
   }
-  return HotkeyAction::None;
+  switch (static_cast<int>(msg.wParam)) {
+  case HOTKEY_STOP:
+    return HotkeyAction::StopOrStart;
+  case HOTKEY_PAUSE:
+    return HotkeyAction::PauseToggle;
+  case HOTKEY_QUIT:
+    return HotkeyAction::Quit;
+  default:
+    return HotkeyAction::None;
+  }
 }
