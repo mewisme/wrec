@@ -1,0 +1,11 @@
+/build/
+/out/
+.codegraph/
+*.user
+*.suo
+*.mp4
+trace.log
+out.txt
+.vs/
+*.VC.db
+*.VC.VC.opendb
