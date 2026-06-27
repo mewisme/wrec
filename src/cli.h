@@ -16,8 +16,11 @@ struct RecordOptions {
   std::wstring title;
   std::wstring outputPath;
   std::wstring outputDir;
-  int fps = 60;
-  int bitrate = 8000000;
+  std::wstring preset = L"medium";
+  int fps = 0;
+  int bitrate = 0;
+  bool fpsExplicit = false;
+  bool bitrateExplicit = false;
   bool cursor = true;
   bool hotkeys = true;
   bool startPaused = false;

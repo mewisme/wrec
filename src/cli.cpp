@@ -166,6 +166,46 @@ Result<std::wstring> resolveRecordOutputPath(const RecordOptions &options) {
   return Result<std::wstring>::ok(std::move(path));
 }
 
+struct PresetValues {
+  int fps;
+  int bitrate;
+};
+
+Result<PresetValues> presetValues(const std::wstring &name) {
+  if (equalsIgnoreCase(name, L"low")) {
+    return Result<PresetValues>::ok({24, 2'000'000});
+  }
+  if (equalsIgnoreCase(name, L"medium")) {
+    return Result<PresetValues>::ok({30, 5'000'000});
+  }
+  if (equalsIgnoreCase(name, L"high")) {
+    return Result<PresetValues>::ok({45, 7'000'000});
+  }
+  if (equalsIgnoreCase(name, L"ultra")) {
+    return Result<PresetValues>::ok({60, 8'000'000});
+  }
+  if (equalsIgnoreCase(name, L"extreme")) {
+    return Result<PresetValues>::ok({60, 12'000'000});
+  }
+  return Result<PresetValues>::fail("Unknown preset: " + wideToUtf8(name) +
+                                    " (expected low, medium, high, ultra, or "
+                                    "extreme)");
+}
+
+void applyRecordPreset(RecordOptions &options) {
+  const auto preset = presetValues(options.preset);
+  if (!preset.isOk()) {
+    return;
+  }
+  const PresetValues values = preset.value();
+  if (!options.fpsExplicit) {
+    options.fps = values.fps;
+  }
+  if (!options.bitrateExplicit) {
+    options.bitrate = values.bitrate;
+  }
+}
+
 Result<ParsedCommand> parseListArgs(ParsedCommand cmd, int argc,
                                     wchar_t *argv[]) {
   for (int i = 2; i < argc; ++i) {
@@ -203,11 +243,15 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
         cmd.record.outputPath = requireValue(i, argc, argv, "-o/--out");
       } else if (isFlag(arg, L"--output-dir", L'd')) {
         cmd.record.outputDir = requireValue(i, argc, argv, "-d/--output-dir");
+      } else if (arg == L"--preset") {
+        cmd.record.preset = requireValue(i, argc, argv, "--preset");
       } else if (isFlag(arg, L"--fps", L'f')) {
         cmd.record.fps = parseInt(requireValue(i, argc, argv, "-f/--fps"));
+        cmd.record.fpsExplicit = true;
       } else if (isFlag(arg, L"--bitrate", L'b')) {
         cmd.record.bitrate =
             parseInt(requireValue(i, argc, argv, "-b/--bitrate"));
+        cmd.record.bitrateExplicit = true;
       } else if (isFlag(arg, L"--cursor", L'c')) {
         if (!parseOnOff(requireValue(i, argc, argv, "-c/--cursor"),
                         cmd.record.cursor)) {
@@ -251,6 +295,10 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
     return Result<ParsedCommand>::fail(outputResult.error());
   }
   cmd.record.outputPath = outputResult.value();
+  if (const auto preset = presetValues(cmd.record.preset); !preset.isOk()) {
+    return Result<ParsedCommand>::fail(preset.error());
+  }
+  applyRecordPreset(cmd.record);
   if (cmd.record.fps <= 0 || cmd.record.fps > 240) {
     return Result<ParsedCommand>::fail("-f/--fps must be between 1 and 240");
   }
@@ -302,8 +350,10 @@ void printUsage() {
                "output folder)\n"
                "  -d, --output-dir <dir> Output folder (default: current "
                "directory)\n"
-               "  -f, --fps <number>     Frame rate (default: 60)\n"
-               "  -b, --bitrate <bps>    Video bitrate (default: 8000000)\n"
+               "      --preset <level>   Quality preset: low, medium, high, "
+               "ultra, extreme (default: medium)\n"
+               "  -f, --fps <number>     Frame rate (overrides preset)\n"
+               "  -b, --bitrate <bps>    Video bitrate (overrides preset)\n"
                "  -c, --cursor on|off    Draw cursor overlay (default: on)\n"
                "  -a, --audio none       Audio not supported yet\n"
                "  -k, --hotkeys on|off   Global hotkeys (default: on)\n"

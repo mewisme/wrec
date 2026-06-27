@@ -113,8 +113,9 @@ Common options (short and long forms):
 | `-t` | `--title` | — | Partial window title match |
 | `-o` | `--out` | auto | Output MP4 path (`wrec-YYYYMMDD-HHMMSS.mp4` if omitted) |
 | `-d` | `--output-dir` | current dir | Output folder for `-o` or auto-named file |
-| `-f` | `--fps` | 60 | Output frame rate |
-| `-b` | `--bitrate` | 8000000 | H.264 bitrate (bps) |
+| — | `--preset` | medium | Quality: `low`, `medium`, `high`, `ultra`, `extreme` (24/2M, 30/5M, 45/7M, 60/8M, 60/12M) |
+| `-f` | `--fps` | preset | Output frame rate (overrides preset) |
+| `-b` | `--bitrate` | preset | H.264 bitrate in bps (overrides preset) |
 | `-c` | `--cursor` | on | Draw cursor overlay (`on\|off`) |
 | `-a` | `--audio` | — | Audio not implemented (`none` only) |
 | `-k` | `--hotkeys` | on | Global hotkeys (`on\|off`) |
