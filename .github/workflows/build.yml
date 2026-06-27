@@ -13,15 +13,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Use whatever MSVC is on the runner (no pinned VS year)
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure
-        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --parallel
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: wrec-windows-x64
-          path: build/Release/wrec.exe
+          path: build/wrec.exe
           if-no-files-found: error

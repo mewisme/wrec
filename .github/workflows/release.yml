@@ -21,11 +21,14 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure
-        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --parallel
 
       - name: Package
         shell: pwsh
@@ -33,7 +36,7 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           $dir = "dist/wrec-$version-windows-x64"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Copy-Item build/Release/wrec.exe $dir/
+          Copy-Item build/wrec.exe $dir/
           Copy-Item README.md $dir/
           Copy-Item LICENSE $dir/
           Compress-Archive -Path $dir/* -DestinationPath "dist/wrec-$version-windows-x64.zip"

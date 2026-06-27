@@ -14,12 +14,21 @@ MIT — Copyright (c) 2026 Mew. See [LICENSE](LICENSE).
 
 ## Build
 
+Requires **Visual Studio 2022 or later** (or Build Tools) with the **Desktop development with C++** workload and Windows 10 SDK (18362+).
+
 ```powershell
 cmake -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-Binary: `build\Release\wrec.exe`
+Or with Ninja (same as CI):
+
+```powershell
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Binary: `build\Release\wrec.exe` (Visual Studio generator) or `build\wrec.exe` (Ninja)
 
 ### Install to PATH
 
