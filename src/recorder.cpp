@@ -1,5 +1,6 @@
 #include "recorder.h"
 
+#include "capture_printwindow.h"
 #include "capture_wgc.h"
 #include "cursor_overlay.h"
 #include "d3d_device.h"
@@ -7,6 +8,7 @@
 #include "logging.h"
 #include "mf_encoder.h"
 #include "window_list.h"
+
 
 #include <chrono>
 #include <condition_variable>
@@ -184,39 +186,60 @@ Status runRecorder(const RecordOptions &options) {
       waitUntil(nextFrameTime);
     }
 
-    CapturedFrame captured{};
-    {
-      std::unique_lock lock(shared.mutex);
-      shared.cv.wait_for(lock, std::chrono::milliseconds(16),
-                         [&] { return shared.hasFrame; });
-      if (!shared.hasFrame) {
+    const bool occluded = isWindowOccluded(target.hwnd);
+    PrintWindowFrame printFrame{};
+    MappedFrame src{};
+    bool useStaging = false;
+
+    if (occluded) {
+      const auto printResult = captureWindowPrintWindow(target.hwnd);
+      if (!printResult.isOk()) {
         continue;
       }
-      captured = shared.frame;
-      shared.hasFrame = false;
-    }
+      printFrame = std::move(printResult.value());
+      src.data = printFrame.pixels.data();
+      src.width = printFrame.width;
+      src.height = printFrame.height;
+      src.rowPitch = printFrame.width * 4;
+    } else {
+      {
+        std::unique_lock lock(shared.mutex);
+        shared.cv.wait_for(lock, std::chrono::milliseconds(16),
+                           [&] { return shared.hasFrame; });
+        if (!shared.hasFrame) {
+          continue;
+        }
+        shared.hasFrame = false;
+      }
 
-    if (state == RecorderState::Recording && encoderOpened &&
-        Clock::now() < nextFrameTime) {
-      continue;
-    }
+      if (state == RecorderState::Recording && encoderOpened &&
+          Clock::now() < nextFrameTime) {
+        continue;
+      }
 
-    auto mapped = device.mapStaging();
-    if (!mapped.isOk()) {
-      return Status::fail(mapped.error());
+      auto mapped = device.mapStaging();
+      if (!mapped.isOk()) {
+        return Status::fail(mapped.error());
+      }
+      src = mapped.value();
+      useStaging = true;
     }
 
     if (!encoderOpened) {
-      outputWidth = captured.width & ~1u;
-      outputHeight = captured.height & ~1u;
+      outputWidth = src.width & ~1u;
+      outputHeight = src.height & ~1u;
       if (outputWidth == 0 || outputHeight == 0) {
-        device.unmapStaging();
+        if (useStaging) {
+          device.unmapStaging();
+        }
         continue;
       }
       if (auto st = encoder.open(options.outputPath, outputWidth, outputHeight,
                                  options.fps, options.bitrate, AudioConfig{});
           !st.isOk()) {
-        device.unmapStaging();
+        if (useStaging) {
+          device.unmapStaging();
+        }
         return st;
       }
       outputBuffer.assign(static_cast<size_t>(outputWidth) * outputHeight * 4,
@@ -232,7 +255,6 @@ Status runRecorder(const RecordOptions &options) {
                                         std::to_string(outputHeight));
     }
 
-    const MappedFrame &src = mapped.value();
     if (src.width == outputWidth && src.height == outputHeight) {
       copyBgraToFixedBuffer(src, outputBuffer, outputWidth, outputHeight);
     } else {
@@ -241,7 +263,9 @@ Status runRecorder(const RecordOptions &options) {
                                         std::to_string(outputHeight));
       scaleBgraToFixedBuffer(src, outputBuffer, outputWidth, outputHeight);
     }
-    device.unmapStaging();
+    if (useStaging) {
+      device.unmapStaging();
+    }
 
     CursorOverlayOptions cursorOpts{};
     cursorOpts.targetWindow = target.hwnd;

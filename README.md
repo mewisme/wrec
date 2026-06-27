@@ -156,7 +156,7 @@ wrec record --title "Notepad" --out demo.mp4 --start-paused
 ## How it works
 
 1. **Window pick** — `EnumWindows` + filters (`list`), or match by HWND/PID/title.
-2. **Capture** — `IGraphicsCaptureItemInterop::CreateForWindow` + D3D11 frame pool. WGC cursor capture is disabled; cursor is drawn manually.
+2. **Capture** — WGC (`CreateForWindow` + D3D11 frame pool) while the target is visible; `PrintWindow` with `PW_RENDERFULLCONTENT` when another window covers it so animations keep updating in the recording. WGC cursor capture is disabled; cursor is drawn manually.
 3. **Cursor** — `GetCursorInfo` / `GetIconInfo`, CPU alpha-blend into the BGRA frame. Cursor is drawn when its screen position falls inside the target window bounds (default). Covered-window cursor is still shown because overlay uses global cursor position, not z-order.
 4. **Encode** — Media Foundation Sink Writer, H.264 MP4. Output resolution is fixed from the first frame; later resizes are letterboxed into that size.
 5. **Pause** — Frames are still captured but not written; timestamps follow wall clock (minus paused time), scaled by `--speed`.
@@ -165,6 +165,7 @@ wrec record --title "Notepad" --out demo.mp4 --start-paused
 
 - **No audio** — `--audio none` only; code is structured for future `IAudioClient` integration.
 - **Minimized windows** — may produce zero-size frames; recording stops with a message.
+- **Apps that pause when hidden** — some programs stop animating when occluded or unfocused (Page Visibility, game pause-on-focus-loss). Capture can only record what the app renders.
 - **CPU encode path** — BGRA copied to MF in software (no GPU MF DXGI path yet).
 - **Fixed output size** — set at session start; resize scales/letterboxes into that buffer.
 - **Cursor outside target** — not drawn when outside the target window screen bounds (default `Hide` policy).
@@ -176,7 +177,7 @@ wrec record --title "Notepad" --out demo.mp4 --start-paused
 
 1. `wrec list` shows common apps (Notepad, Chrome, VS Code).
 2. `wrec record --title "Notepad" --out test.mp4 --fps 30` creates a playable MP4.
-3. Covered target still shows the target content (WGC, not BitBlt).
+3. Covered target still records updating content (PrintWindow fallback when occluded).
 4. Cursor visible inside target bounds with `--cursor on`.
 5. Ctrl+Alt+P pause/resume without corrupting the file.
 6. Ctrl+Alt+Q exits and finalizes.

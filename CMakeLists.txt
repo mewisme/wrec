@@ -25,6 +25,7 @@ add_executable(wrec
     src/hotkeys.cpp
     src/recorder.cpp
     src/capture_wgc.cpp
+    src/capture_printwindow.cpp
     src/d3d_device.cpp
     src/cursor_overlay.cpp
     src/mf_encoder.cpp
