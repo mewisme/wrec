@@ -26,8 +26,15 @@
 namespace {
 
 constexpr wchar_t kWindowClass[] = L"wrec_gui";
-constexpr int kClientWidth = 640;
-constexpr int kClientHeight = 540;
+constexpr int kBaseClientWidth = 640;
+constexpr int kBaseClientHeight = 540;
+
+int guiDpi(HWND hwnd) {
+  const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : GetDpiForSystem();
+  return dpi != 0 ? static_cast<int>(dpi) : 96;
+}
+
+int guiPx(int value, int dpi) { return MulDiv(value, dpi, 96); }
 
 constexpr UINT WM_APP_LOG = WM_APP + 1;
 constexpr UINT WM_APP_RECORD_DONE = WM_APP + 2;
@@ -150,24 +157,24 @@ std::wstring exeBasename(const std::wstring &path) {
   return path.substr(pos + 1);
 }
 
-void setupListColumns(HWND listView) {
+void setupListColumns(HWND listView, int dpi) {
   ListView_SetExtendedListViewStyle(listView, LVS_EX_FULLROWSELECT);
   LVCOLUMNW col{};
   col.mask = LVCF_TEXT | LVCF_WIDTH;
   col.pszText = const_cast<wchar_t *>(L"Title");
-  col.cx = 220;
+  col.cx = guiPx(220, dpi);
   ListView_InsertColumn(listView, 0, &col);
   col.pszText = const_cast<wchar_t *>(L"EXE");
-  col.cx = 100;
+  col.cx = guiPx(100, dpi);
   ListView_InsertColumn(listView, 1, &col);
   col.pszText = const_cast<wchar_t *>(L"Size");
-  col.cx = 80;
+  col.cx = guiPx(80, dpi);
   ListView_InsertColumn(listView, 2, &col);
   col.pszText = const_cast<wchar_t *>(L"PID");
-  col.cx = 60;
+  col.cx = guiPx(60, dpi);
   ListView_InsertColumn(listView, 3, &col);
   col.pszText = const_cast<wchar_t *>(L"HWND");
-  col.cx = 90;
+  col.cx = guiPx(90, dpi);
   ListView_InsertColumn(listView, 4, &col);
 }
 
@@ -490,35 +497,47 @@ void onRecordDone(HWND hwnd, RecordDonePayload *payload) {
 }
 
 void createChildControls(HWND hwnd) {
-  createButton(hwnd, IDC_REFRESH, L"Refresh", 8, 8, 80, 24);
-  createCheck(hwnd, IDC_SHOW_ALL, L"Show all windows", 96, 10, 160, 20, false);
+  const int dpi = guiDpi(hwnd);
+  const auto px = [&](int v) { return guiPx(v, dpi); };
+  const int margin = px(8);
+  const int innerW = px(kBaseClientWidth) - margin * 2;
+  const int browseW = px(88);
+  const int editW = innerW - px(88) - browseW;
+
+  createButton(hwnd, IDC_REFRESH, L"Refresh", margin, px(8), px(88), px(26));
+  createCheck(hwnd, IDC_SHOW_ALL, L"Show all windows", px(104), px(10), px(176),
+              px(22), false);
 
   CreateWindowExW(0, WC_LISTVIEWW, L"",
                   WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL |
                       LVS_SHOWSELALWAYS,
-                  8, 36, 624, 160, hwnd,
+                  margin, px(36), innerW, px(160), hwnd,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LIST)),
                   nullptr, nullptr);
 
   CreateWindowExW(0, L"STATIC", L"Selected: (none)",
-                  WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS, 8, 200, 624, 18, hwnd,
+                  WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS, margin, px(200),
+                  innerW, px(18), hwnd,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_SELECTED)),
                   nullptr, nullptr);
 
-  createLabel(hwnd, L"Output file:", 8, 224, 80, 18);
-  createEdit(hwnd, IDC_OUTPUT_FILE, 88, 220, 456, 22);
-  createButton(hwnd, IDC_BROWSE_FILE, L"Browse...", 552, 218, 80, 24);
+  createLabel(hwnd, L"Output file:", margin, px(224), px(84), px(18));
+  createEdit(hwnd, IDC_OUTPUT_FILE, px(92), px(220), editW, px(24));
+  createButton(hwnd, IDC_BROWSE_FILE, L"Browse...", margin + px(92) + editW,
+               px(218), browseW, px(26));
 
-  createLabel(hwnd, L"Output dir:", 8, 252, 80, 18);
-  createEdit(hwnd, IDC_OUTPUT_DIR, 88, 248, 456, 22);
-  createButton(hwnd, IDC_BROWSE_DIR, L"Browse...", 552, 246, 80, 24);
+  createLabel(hwnd, L"Output dir:", margin, px(252), px(84), px(18));
+  createEdit(hwnd, IDC_OUTPUT_DIR, px(92), px(248), editW, px(24));
+  createButton(hwnd, IDC_BROWSE_DIR, L"Browse...", margin + px(92) + editW,
+               px(246), browseW, px(26));
 
-  createLabel(hwnd, L"Preset:", 8, 282, 50, 18);
-  const HWND preset = CreateWindowExW(
-      0, L"COMBOBOX", L"",
-      WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, 60, 278, 100, 160,
-      hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PRESET)), nullptr,
-      nullptr);
+  createLabel(hwnd, L"Preset:", margin, px(282), px(52), px(18));
+  const HWND preset =
+      CreateWindowExW(0, L"COMBOBOX", L"",
+                      WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                      px(64), px(278), px(108), px(160), hwnd,
+                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PRESET)),
+                      nullptr, nullptr);
   SendMessageW(preset, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"low"));
   SendMessageW(preset, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"medium"));
   SendMessageW(preset, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"high"));
@@ -526,37 +545,45 @@ void createChildControls(HWND hwnd) {
   SendMessageW(preset, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"extreme"));
   SendMessageW(preset, CB_SETCURSEL, 1, 0);
 
-  createLabel(hwnd, L"FPS:", 176, 282, 30, 18);
-  createEdit(hwnd, IDC_FPS, 208, 278, 50, 22);
-  createLabel(hwnd, L"Bitrate:", 268, 282, 45, 18);
-  createEdit(hwnd, IDC_BITRATE, 316, 278, 80, 22);
+  createLabel(hwnd, L"FPS:", px(184), px(282), px(36), px(18));
+  createEdit(hwnd, IDC_FPS, px(220), px(278), px(52), px(24));
+  createLabel(hwnd, L"Bitrate:", px(280), px(282), px(56), px(18));
+  createEdit(hwnd, IDC_BITRATE, px(340), px(278), px(84), px(24));
 
-  createCheck(hwnd, IDC_CURSOR, L"Cursor", 8, 310, 70, 20, true);
-  createCheck(hwnd, IDC_HOTKEYS, L"Hotkeys", 84, 310, 80, 20, true);
-  createCheck(hwnd, IDC_START_PAUSED, L"Start paused", 170, 310, 110, 20,
-              false);
-  createLabel(hwnd, L"Speed:", 290, 312, 45, 18);
-  createEdit(hwnd, IDC_SPEED, 336, 308, 50, 22);
+  createCheck(hwnd, IDC_CURSOR, L"Cursor", margin, px(310), px(88), px(22),
+              true);
+  createCheck(hwnd, IDC_HOTKEYS, L"Hotkeys", px(104), px(310), px(92), px(22),
+              true);
+  createCheck(hwnd, IDC_START_PAUSED, L"Start paused", px(204), px(310),
+              px(132), px(22), false);
+  createLabel(hwnd, L"Speed:", px(344), px(312), px(52), px(18));
+  createEdit(hwnd, IDC_SPEED, px(400), px(308), px(52), px(24));
   setWindowText(GetDlgItem(hwnd, IDC_SPEED), L"1");
 
-  createButton(hwnd, IDC_START, L"Start Recording", 8, 340, 120, 28);
-  createButton(hwnd, IDC_STOP, L"Stop", 136, 340, 80, 28);
-  createButton(hwnd, IDC_OPEN_RECENT, L"Play Recent", 224, 340, 100, 28);
+  createButton(hwnd, IDC_START, L"Start Recording", margin, px(340), px(144),
+               px(30));
+  createButton(hwnd, IDC_STOP, L"Stop", px(160), px(340), px(88), px(30));
+  createButton(hwnd, IDC_OPEN_RECENT, L"Play Recent", px(256), px(340), px(120),
+               px(30));
   EnableWindow(GetDlgItem(hwnd, IDC_STOP), FALSE);
   EnableWindow(GetDlgItem(hwnd, IDC_OPEN_RECENT), FALSE);
 
-  CreateWindowExW(0, L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE, 8, 376, 624,
-                  18, hwnd,
+  CreateWindowExW(0, L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE, margin,
+                  px(376), innerW, px(18), hwnd,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STATUS)),
                   nullptr, nullptr);
 
-  createLabel(hwnd, L"Install dir:", 8, 418, 70, 18);
-  createEdit(hwnd, IDC_INSTALL_DIR, 84, 414, 400, 22);
+  const int installBtnW = px(92);
+  const int installEditW = innerW - px(84) - installBtnW;
+  createLabel(hwnd, L"Install dir:", margin, px(418), px(80), px(18));
+  createEdit(hwnd, IDC_INSTALL_DIR, px(88), px(414), installEditW, px(24));
   setWindowText(GetDlgItem(hwnd, IDC_INSTALL_DIR), defaultInstallDir());
-  createButton(hwnd, IDC_INSTALL, L"Install", 492, 412, 80, 26);
-  createButton(hwnd, IDC_UNINSTALL, L"Uninstall", 492, 444, 80, 26);
+  createButton(hwnd, IDC_INSTALL, L"Install", margin + px(88) + installEditW,
+               px(412), installBtnW, px(28));
+  createButton(hwnd, IDC_UNINSTALL, L"Uninstall",
+               margin + px(88) + installEditW, px(444), installBtnW, px(28));
 
-  setupListColumns(GetDlgItem(hwnd, IDC_LIST));
+  setupListColumns(GetDlgItem(hwnd, IDC_LIST), dpi);
   applyPresetFields(hwnd);
   refreshWindowList(hwnd);
 }
@@ -712,7 +739,8 @@ int runGui() {
   wc.lpszClassName = kWindowClass;
   RegisterClassExW(&wc);
 
-  RECT rect{0, 0, kClientWidth, kClientHeight};
+  const int dpi = guiDpi(nullptr);
+  RECT rect{0, 0, guiPx(kBaseClientWidth, dpi), guiPx(kBaseClientHeight, dpi)};
   AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
   const int width = rect.right - rect.left;
   const int height = rect.bottom - rect.top;
