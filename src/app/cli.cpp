@@ -172,13 +172,11 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
     const std::wstring arg = argv[i];
     try {
       if (isFlag(arg, L"--hwnd", L'w')) {
-        cmd.record.hwnds.push_back(
-            parseU64(requireValue(i, argc, argv, "-w/--hwnd")));
+        cmd.record.hwnds.push_back(parseU64(requireValue(i, argc, argv, "-w")));
       } else if (isFlag(arg, L"--pid", L'p')) {
-        cmd.record.pids.push_back(
-            parseU32(requireValue(i, argc, argv, "-p/--pid")));
+        cmd.record.pids.push_back(parseU32(requireValue(i, argc, argv, "-p")));
       } else if (isFlag(arg, L"--title", L't')) {
-        cmd.record.titles.push_back(requireValue(i, argc, argv, "-t/--title"));
+        cmd.record.titles.push_back(requireValue(i, argc, argv, "-t"));
       } else if (arg == L"--layout") {
         cmd.record.layout = requireValue(i, argc, argv, "--layout");
       } else if (arg == L"--canvas") {
@@ -188,51 +186,49 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
           return Result<ParsedCommand>::fail(
               "--canvas expects WxH (e.g. 1920x1080)");
         }
-      } else if (arg == L"--source") {
+      } else if (isFlag(arg, L"--source", L'S')) {
         const auto spec =
-            parseCustomSourceSpec(requireValue(i, argc, argv, "--source"));
+            parseCustomSourceSpec(requireValue(i, argc, argv, "-S"));
         if (!spec.isOk()) {
           return Result<ParsedCommand>::fail(spec.error());
         }
         cmd.record.customSources.push_back(spec.value());
         cmd.record.layout = L"custom";
       } else if (isFlag(arg, L"--out", L'o')) {
-        cmd.record.outputPath = requireValue(i, argc, argv, "-o/--out");
+        cmd.record.outputPath = requireValue(i, argc, argv, "-o");
       } else if (isFlag(arg, L"--output-dir", L'd')) {
-        cmd.record.outputDir = requireValue(i, argc, argv, "-d/--output-dir");
+        cmd.record.outputDir = requireValue(i, argc, argv, "-d");
       } else if (arg == L"--preset") {
         cmd.record.preset = requireValue(i, argc, argv, "--preset");
-      } else if (isFlag(arg, L"--fps", L'f')) {
-        cmd.record.fps = parseInt(requireValue(i, argc, argv, "-f/--fps"));
+      } else if (arg == L"--fps") {
+        cmd.record.fps = parseInt(requireValue(i, argc, argv, "--fps"));
         cmd.record.fpsExplicit = true;
-      } else if (isFlag(arg, L"--bitrate", L'b')) {
-        cmd.record.bitrate =
-            parseInt(requireValue(i, argc, argv, "-b/--bitrate"));
+      } else if (arg == L"--bitrate") {
+        cmd.record.bitrate = parseInt(requireValue(i, argc, argv, "--bitrate"));
         cmd.record.bitrateExplicit = true;
-      } else if (isFlag(arg, L"--cursor", L'c')) {
-        if (!parseOnOff(requireValue(i, argc, argv, "-c/--cursor"),
+      } else if (arg == L"--cursor") {
+        if (!parseOnOff(requireValue(i, argc, argv, "--cursor"),
                         cmd.record.cursor)) {
-          return Result<ParsedCommand>::fail("-c/--cursor expects on or off");
+          return Result<ParsedCommand>::fail("--cursor expects on or off");
         }
-      } else if (isFlag(arg, L"--audio", L'a')) {
-        const std::wstring audio = requireValue(i, argc, argv, "-a/--audio");
+      } else if (arg == L"--audio") {
+        const std::wstring audio = requireValue(i, argc, argv, "--audio");
         if (!equalsIgnoreCase(audio, L"none")) {
           return Result<ParsedCommand>::fail(
-              "-a/--audio only supports none for now");
+              "--audio only supports none for now");
         }
-      } else if (isFlag(arg, L"--hotkeys", L'k')) {
-        if (!parseOnOff(requireValue(i, argc, argv, "-k/--hotkeys"),
+      } else if (arg == L"--hotkeys") {
+        if (!parseOnOff(requireValue(i, argc, argv, "--hotkeys"),
                         cmd.record.hotkeys)) {
-          return Result<ParsedCommand>::fail("-k/--hotkeys expects on or off");
+          return Result<ParsedCommand>::fail("--hotkeys expects on or off");
         }
-      } else if (isFlag(arg, L"--start-paused", L'P')) {
+      } else if (arg == L"--start-paused") {
         cmd.record.startPaused = true;
-      } else if (isFlag(arg, L"--speed", L's')) {
-        cmd.record.speed =
-            parseSpeed(requireValue(i, argc, argv, "-s/--speed"));
+      } else if (arg == L"--speed") {
+        cmd.record.speed = parseSpeed(requireValue(i, argc, argv, "--speed"));
       } else if (isFlag(arg, L"--verbose", L'v')) {
         cmd.record.verbose = true;
-      } else if (isFlag(arg, L"--json", L'j')) {
+      } else if (arg == L"--json") {
         cmd.record.json = true;
       } else {
         return Result<ParsedCommand>::fail("Unknown option for record: " +
@@ -245,7 +241,7 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
 
   if (countTargets(cmd.record) < 1) {
     return Result<ParsedCommand>::fail(
-        "Specify at least one of -w/--hwnd, -p/--pid, -t/--title, or --source");
+        "Specify at least one of -w, -p, -t, or -S/--source");
   }
   if (!cmd.record.customSources.empty() &&
       (cmd.record.canvasWidth == 0 || cmd.record.canvasHeight == 0)) {
@@ -254,7 +250,7 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
   if (parseLayoutKind(cmd.record.layout) == LayoutKind::Custom &&
       cmd.record.customSources.empty()) {
     return Result<ParsedCommand>::fail(
-        "--layout custom requires one or more --source entries");
+        "--layout custom requires one or more -S/--source entries");
   }
   const auto outputResult = resolveRecordOutputPath(cmd.record);
   if (!outputResult.isOk()) {
@@ -266,14 +262,14 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
   }
   applyRecordPreset(cmd.record);
   if (cmd.record.fps <= 0 || cmd.record.fps > 240) {
-    return Result<ParsedCommand>::fail("-f/--fps must be between 1 and 240");
+    return Result<ParsedCommand>::fail("--fps must be between 1 and 240");
   }
   if (cmd.record.bitrate <= 0) {
-    return Result<ParsedCommand>::fail("-b/--bitrate must be positive");
+    return Result<ParsedCommand>::fail("--bitrate must be positive");
   }
   if (cmd.record.speed <= 0.0 || cmd.record.speed > 64.0) {
     return Result<ParsedCommand>::fail(
-        "-s/--speed must be between 0 and 64 (e.g. 1, 0.9, 2x)");
+        "--speed must be between 0 and 64 (e.g. 1, 0.9, 2x)");
   }
   return Result<ParsedCommand>::ok(std::move(cmd));
 }
@@ -301,7 +297,7 @@ void printUsage() {
                "Usage:\n"
                "  wrec list|l [-a] [-j] [-v]\n"
                "  wrec record|rec|r (-w <HWND> | -p <PID> | -t <text> | "
-               "--source ...) [-o <file.mp4>] [options]\n"
+               "-S <spec>) [-o <file.mp4>] [options]\n"
                "  wrec gui\n"
                "  wrec install [-d <dir>] [-v]\n"
                "  wrec uninstall [-d <dir>] [-v]\n\n"
@@ -314,34 +310,33 @@ void printUsage() {
                "  -p, --pid <PID>        Target process ID (repeatable)\n"
                "  -t, --title <text>     Partial window title match "
                "(repeatable)\n"
+               "  -o, --out <file.mp4>   Output file (default: auto-named in "
+               "output folder)\n"
+               "  -d, --output-dir <dir> Output folder (default: Videos)\n"
+               "  -v, --verbose          Verbose logging\n"
+               "  -S, --source <spec>    Custom placement: "
+               "hwnd=...,x=...,y=...,w=...,h=[,scale=fit|fill|stretch]\n"
                "      --layout <mode>    auto, grid, horizontal, vertical, "
                "custom (default: auto)\n"
                "      --canvas <WxH>     Output canvas size (required for "
                "custom layout)\n"
-               "      --source <spec>    Custom placement: "
-               "hwnd=...,x=...,y=...,w=...,h=[,scale=fit|fill|stretch]\n"
-               "  -o, --out <file.mp4>   Output file (default: auto-named in "
-               "output folder)\n"
-               "  -d, --output-dir <dir> Output folder (default: current "
-               "directory)\n"
                "      --preset <level>   Quality preset: low, medium, high, "
                "ultra, extreme (default: medium)\n"
-               "  -f, --fps <number>     Frame rate (overrides preset)\n"
-               "  -b, --bitrate <bps>    Video bitrate (overrides preset)\n"
-               "  -c, --cursor on|off    Draw cursor overlay (default: on)\n"
-               "  -a, --audio none       Audio not supported yet\n"
-               "  -k, --hotkeys on|off   Global hotkeys (default: on)\n"
-               "  -P, --start-paused     Capture armed; press Ctrl+Alt+S to "
+               "      --fps <number>     Frame rate (overrides preset)\n"
+               "      --bitrate <bps>    Video bitrate (overrides preset)\n"
+               "      --cursor on|off    Draw cursor overlay (default: on)\n"
+               "      --audio none       Audio not supported yet\n"
+               "      --hotkeys on|off   Global hotkeys (default: on)\n"
+               "      --start-paused     Capture armed; press Ctrl+Alt+S to "
                "start writing\n"
-               "  -s, --speed <mult>     Playback speed multiplier (default: "
+               "      --speed <mult>     Playback speed multiplier (default: "
                "1, e.g. 0.9, 2x)\n"
-               "  -v, --verbose          Verbose logging\n"
-               "  -j, --json             JSON events on stderr\n\n"
+               "      --json             JSON events on stderr\n\n"
                "Multi-window examples:\n"
                "  wrec r -t Chrome -t \"Visual Studio Code\" -o session.mp4\n"
                "  wrec r -t Chrome -t Notepad --layout horizontal -o dual.mp4\n"
                "  wrec r -w 0x123 -w 0x456 --layout grid -o grid.mp4\n"
-               "  wrec r --canvas 1920x1080 --source hwnd=0x123,x=0,y=0,w=960,"
+               "  wrec r --canvas 1920x1080 -S hwnd=0x123,x=0,y=0,w=960,"
                "h=540 -o custom.mp4\n\n"
                "Install options:\n"
                "  -d, --dir <path>       Install directory (default: "
