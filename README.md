@@ -100,6 +100,8 @@ wrec l -j          # --json
 wrec record --hwnd 0x12345 --out capture.mp4   # aliases: rec, r
 wrec r -p 1234 -o capture.mp4
 wrec r -t "Notepad" -o capture.mp4 -f 30
+wrec r -t "Notepad"                              # auto: wrec-YYYYMMDD-HHMMSS.mp4
+wrec r -t "Notepad" -d D:\captures              # auto name in folder
 ```
 
 Common options (short and long forms):
@@ -109,7 +111,8 @@ Common options (short and long forms):
 | `-w` | `--hwnd` | — | Target window handle |
 | `-p` | `--pid` | — | Target process ID |
 | `-t` | `--title` | — | Partial window title match |
-| `-o` | `--out` | — | Output MP4 path (required) |
+| `-o` | `--out` | auto | Output MP4 path (`wrec-YYYYMMDD-HHMMSS.mp4` if omitted) |
+| `-d` | `--output-dir` | current dir | Output folder for `-o` or auto-named file |
 | `-f` | `--fps` | 60 | Output frame rate |
 | `-b` | `--bitrate` | 8000000 | H.264 bitrate (bps) |
 | `-c` | `--cursor` | on | Draw cursor overlay (`on\|off`) |

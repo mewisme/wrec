@@ -15,6 +15,7 @@ struct RecordOptions {
   unsigned long pid = 0;
   std::wstring title;
   std::wstring outputPath;
+  std::wstring outputDir;
   int fps = 60;
   int bitrate = 8000000;
   bool cursor = true;
