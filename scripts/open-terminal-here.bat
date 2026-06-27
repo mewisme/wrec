@@ -1,10 +1,12 @@
 @echo off
 cd /d "%~dp0"
 title wrec
-echo wrec - extracted folder: %CD%
+echo wrec - folder: %CD%
 echo.
 echo Examples:
-echo   wrec.exe l
-echo   wrec.exe r -t "Notepad" -o demo.mp4 -f 30
+echo   wrec.exe list
+echo   wrec.exe gui
+echo   wrec.exe r -t "Notepad" -d .\captures
+echo   wrec.exe install
 echo.
 cmd /k
