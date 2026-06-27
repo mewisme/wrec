@@ -5,10 +5,40 @@
 #include <iostream>
 #include <sstream>
 
+std::string wideToUtf8(const std::wstring &wide);
+
 namespace {
 bool g_verbose = false;
 bool g_json = false;
+
+void writeConsoleStream(DWORD stdHandle, FILE *file, const std::wstring &text) {
+  HANDLE handle = GetStdHandle(stdHandle);
+  DWORD mode = 0;
+  if (handle != INVALID_HANDLE_VALUE && handle != nullptr &&
+      GetConsoleMode(handle, &mode) != 0) {
+    DWORD written = 0;
+    WriteConsoleW(handle, text.c_str(), static_cast<DWORD>(text.size()),
+                  &written, nullptr);
+    return;
+  }
+  const std::string utf8 = wideToUtf8(text);
+  fwrite(utf8.data(), 1, utf8.size(), file);
+  fflush(file);
+}
 } // namespace
+
+void initConsoleEncoding() {
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+}
+
+void writeStdout(const std::wstring &text) {
+  writeConsoleStream(STD_OUTPUT_HANDLE, stdout, text);
+}
+
+void writeStderr(const std::wstring &text) {
+  writeConsoleStream(STD_ERROR_HANDLE, stderr, text);
+}
 
 void logSetVerbose(bool verbose) { g_verbose = verbose; }
 void logSetJson(bool json) { g_json = json; }

@@ -4,6 +4,10 @@
 
 enum class LogLevel { Info, Verbose, Error };
 
+void initConsoleEncoding();
+void writeStdout(const std::wstring &text);
+void writeStderr(const std::wstring &text);
+
 void logSetVerbose(bool verbose);
 void logSetJson(bool json);
 bool logIsJson();

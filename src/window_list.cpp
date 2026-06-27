@@ -5,11 +5,9 @@
 #include <Psapi.h>
 #include <Windows.h>
 
-
 #include <algorithm>
 #include <cwctype>
 #include <iomanip>
-#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -150,6 +148,24 @@ bool titleContainsCaseInsensitive(const std::wstring &haystack,
 
 int windowArea(const WindowInfo &info) { return info.width * info.height; }
 
+std::wstring truncateWide(const std::wstring &text, size_t maxChars) {
+  if (text.size() <= maxChars) {
+    return text;
+  }
+  if (maxChars <= 3) {
+    return text.substr(0, maxChars);
+  }
+  return text.substr(0, maxChars - 3) + L"...";
+}
+
+std::wstring exeBasename(const std::wstring &path) {
+  const size_t pos = path.find_last_of(L"\\/");
+  if (pos == std::wstring::npos) {
+    return path;
+  }
+  return path.substr(pos + 1);
+}
+
 } // namespace
 
 std::vector<WindowInfo> enumerateWindows(bool includeAll) {
@@ -170,47 +186,42 @@ std::vector<WindowInfo> enumerateWindows(bool includeAll) {
 Status listWindows(const ListOptions &options) {
   const auto windows = enumerateWindows(options.all);
   if (options.json) {
-    std::wcout << L"[";
+    std::wostringstream json;
+    json << L"[";
     for (size_t i = 0; i < windows.size(); ++i) {
       const auto &w = windows[i];
       if (i > 0) {
-        std::wcout << L",";
+        json << L",";
       }
-      std::wcout << L"{" << L"\"pid\":" << w.pid << L"," << L"\"hwnd\":"
-                 << reinterpret_cast<unsigned long long>(w.hwnd) << L","
-                 << L"\"exe\":\"" << jsonEscape(w.exePath) << L"\","
-                 << L"\"title\":\"" << jsonEscape(w.title) << L"\","
-                 << L"\"width\":" << w.width << L"," << L"\"height\":"
-                 << w.height << L"," << L"\"visible\":"
-                 << (w.visible ? L"true" : L"false") << L"}";
+      json << L"{" << L"\"pid\":" << w.pid << L"," << L"\"hwnd\":"
+           << reinterpret_cast<unsigned long long>(w.hwnd) << L","
+           << L"\"exe\":\"" << jsonEscape(w.exePath) << L"\","
+           << L"\"title\":\"" << jsonEscape(w.title) << L"\"," << L"\"width\":"
+           << w.width << L"," << L"\"height\":" << w.height << L","
+           << L"\"visible\":" << (w.visible ? L"true" : L"false") << L"}";
     }
-    std::wcout << L"]\n";
+    json << L"]\n";
+    writeStdout(json.str());
     return Status::ok();
   }
 
-  std::cout << std::left << std::setw(8) << "PID" << std::setw(14) << "HWND"
-            << std::setw(28) << "EXE" << std::setw(32) << "TITLE"
-            << std::setw(12) << "SIZE" << "VIS\n";
+  std::wostringstream header;
+  header << std::left << std::setw(8) << L"PID" << std::setw(14) << L"HWND"
+         << std::setw(28) << L"EXE" << std::setw(32) << L"TITLE"
+         << std::setw(12) << L"SIZE" << L"VIS\n";
+  writeStdout(header.str());
 
   for (const auto &w : windows) {
-    std::ostringstream size;
-    size << w.width << 'x' << w.height;
-    std::string exeShort = wideToUtf8(w.exePath);
-    const size_t pos = exeShort.find_last_of("\\/");
-    if (pos != std::string::npos) {
-      exeShort = exeShort.substr(pos + 1);
-    }
-    if (exeShort.size() > 26) {
-      exeShort = exeShort.substr(0, 23) + "...";
-    }
-    std::string titleShort = wideToUtf8(w.title);
-    if (titleShort.size() > 30) {
-      titleShort = titleShort.substr(0, 27) + "...";
-    }
-    std::cout << std::left << std::setw(8) << w.pid << std::setw(14)
-              << reinterpret_cast<unsigned long long>(w.hwnd) << std::setw(28)
-              << exeShort << std::setw(32) << titleShort << std::setw(12)
-              << size.str() << (w.visible ? "yes" : "no") << '\n';
+    std::wostringstream size;
+    size << w.width << L'x' << w.height;
+    const std::wstring exeShort = truncateWide(exeBasename(w.exePath), 26);
+    const std::wstring titleShort = truncateWide(w.title, 30);
+    std::wostringstream row;
+    row << std::left << std::setw(8) << w.pid << std::setw(14)
+        << reinterpret_cast<unsigned long long>(w.hwnd) << std::setw(28)
+        << exeShort << std::setw(32) << titleShort << std::setw(12)
+        << size.str() << (w.visible ? L"yes" : L"no") << L'\n';
+    writeStdout(row.str());
   }
   return Status::ok();
 }

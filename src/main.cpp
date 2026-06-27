@@ -6,6 +6,7 @@
 #include <winrt/base.h>
 
 int wmain(int argc, wchar_t *argv[]) {
+  initConsoleEncoding();
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
 
