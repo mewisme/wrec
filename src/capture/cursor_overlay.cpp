@@ -1,5 +1,6 @@
 #include "cursor_overlay.h"
 
+#include "compositor.h"
 #include "logging.h"
 
 #include <Windows.h>
@@ -8,8 +9,6 @@
 #include <algorithm>
 #include <cstring>
 #include <vector>
-
-namespace {
 
 struct RectI {
   int left = 0;
@@ -128,7 +127,27 @@ bool cursorInsideTarget(const POINT &screenPos, const RectI &bounds, int hotX,
          y < bounds.bottom;
 }
 
-} // namespace
+void drawCursorAt(std::vector<uint8_t> &frameBuffer, uint32_t width,
+                  uint32_t height, const std::vector<uint8_t> &cursorPixels,
+                  int cursorW, int cursorH, int frameLeft, int frameTop) {
+  for (int y = 0; y < cursorH; ++y) {
+    const int dstY = frameTop + y;
+    if (dstY < 0 || dstY >= static_cast<int>(height)) {
+      continue;
+    }
+    for (int x = 0; x < cursorW; ++x) {
+      const int dstX = frameLeft + x;
+      if (dstX < 0 || dstX >= static_cast<int>(width)) {
+        continue;
+      }
+      const uint8_t *src =
+          cursorPixels.data() + (static_cast<size_t>(y) * cursorW + x) * 4;
+      uint8_t *dst =
+          frameBuffer.data() + (static_cast<size_t>(dstY) * width + dstX) * 4;
+      alphaBlendPixel(dst, src[2], src[1], src[0], src[3]);
+    }
+  }
+}
 
 void compositeCursor(std::vector<uint8_t> &frameBuffer, uint32_t width,
                      uint32_t height, const CursorOverlayOptions &options) {
@@ -165,22 +184,75 @@ void compositeCursor(std::vector<uint8_t> &frameBuffer, uint32_t width,
   // Map screen position to frame-local coordinates
   const int frameLeft = ci.ptScreenPos.x - hotX - bounds.left;
   const int frameTop = ci.ptScreenPos.y - hotY - bounds.top;
+  drawCursorAt(frameBuffer, width, height, cursorPixels, cursorW, cursorH,
+               frameLeft, frameTop);
+}
 
-  for (int y = 0; y < cursorH; ++y) {
-    const int dstY = frameTop + y;
-    if (dstY < 0 || dstY >= static_cast<int>(height)) {
+void compositeCursorOnScene(std::vector<uint8_t> &frameBuffer, uint32_t width,
+                            uint32_t height, bool enabled,
+                            const std::vector<SceneCursorSource> &sources) {
+  if (!enabled || sources.empty()) {
+    return;
+  }
+
+  CURSORINFO ci{};
+  ci.cbSize = sizeof(ci);
+  if (!GetCursorInfo(&ci) || !(ci.flags & CURSOR_SHOWING)) {
+    return;
+  }
+
+  std::vector<uint8_t> cursorPixels;
+  int cursorW = 0;
+  int cursorH = 0;
+  int hotX = 0;
+  int hotY = 0;
+  if (!readCursorBitmap(ci.hCursor, cursorPixels, cursorW, cursorH, hotX,
+                        hotY)) {
+    return;
+  }
+
+  const int cursorX = ci.ptScreenPos.x - hotX;
+  const int cursorY = ci.ptScreenPos.y - hotY;
+
+  for (auto it = sources.rbegin(); it != sources.rend(); ++it) {
+    const SceneCursorSource &src = *it;
+    if (!src.hwnd) {
       continue;
     }
-    for (int x = 0; x < cursorW; ++x) {
-      const int dstX = frameLeft + x;
-      if (dstX < 0 || dstX >= static_cast<int>(width)) {
-        continue;
-      }
-      const uint8_t *src =
-          cursorPixels.data() + (static_cast<size_t>(y) * cursorW + x) * 4;
-      uint8_t *dst =
-          frameBuffer.data() + (static_cast<size_t>(dstY) * width + dstX) * 4;
-      alphaBlendPixel(dst, src[2], src[1], src[0], src[3]);
+    RectI bounds{};
+    if (!getTargetBounds(src.hwnd, bounds)) {
+      continue;
     }
+    if (cursorX < bounds.left || cursorY < bounds.top ||
+        cursorX >= bounds.right || cursorY >= bounds.bottom) {
+      continue;
+    }
+
+    const int windowW = bounds.right - bounds.left;
+    const int windowH = bounds.bottom - bounds.top;
+    if (windowW <= 0 || windowH <= 0) {
+      continue;
+    }
+
+    const uint32_t frameW =
+        src.frameWidth > 0 ? src.frameWidth : static_cast<uint32_t>(windowW);
+    const uint32_t frameH =
+        src.frameHeight > 0 ? src.frameHeight : static_cast<uint32_t>(windowH);
+
+    const double relX = static_cast<double>(cursorX - bounds.left) / windowW;
+    const double relY = static_cast<double>(cursorY - bounds.top) / windowH;
+    const double srcPx = relX * frameW;
+    const double srcPy = relY * frameH;
+
+    const BlitRect blit =
+        computeBlitRect(frameW, frameH, src.destW, src.destH, src.scale);
+    const int canvasLeft =
+        src.destX + blit.offsetX + static_cast<int>(srcPx * blit.scaleX);
+    const int canvasTop =
+        src.destY + blit.offsetY + static_cast<int>(srcPy * blit.scaleY);
+
+    drawCursorAt(frameBuffer, width, height, cursorPixels, cursorW, cursorH,
+                 canvasLeft, canvasTop);
+    return;
   }
 }

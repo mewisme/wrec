@@ -1,6 +1,7 @@
 #include "gui.h"
 
 #include "cli.h"
+#include "hotkeys.h"
 #include "logging.h"
 #include "path_install.h"
 #include "record_options.h"
@@ -27,7 +28,7 @@ namespace {
 
 constexpr wchar_t kWindowClass[] = L"wrec_gui";
 constexpr int kBaseClientWidth = 640;
-constexpr int kBaseClientHeight = 540;
+constexpr int kBaseClientHeight = 580;
 
 int guiDpi(HWND hwnd) {
   const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : GetDpiForSystem();
@@ -49,6 +50,7 @@ enum ControlId : int {
   IDC_OUTPUT_DIR,
   IDC_BROWSE_DIR,
   IDC_PRESET,
+  IDC_LAYOUT,
   IDC_FPS,
   IDC_BITRATE,
   IDC_CURSOR,
@@ -75,6 +77,9 @@ struct GuiState {
   std::thread recordThread;
   std::atomic<bool> stopRequested{false};
   std::atomic<bool> recording{false};
+  std::atomic<int> pendingHotkey{static_cast<int>(HotkeyAction::None)};
+  bool guiHotkeysRegistered = false;
+  bool closePending = false;
   std::wstring lastRecordedPath;
   bool fpsUserEdited = false;
   bool bitrateUserEdited = false;
@@ -142,11 +147,14 @@ HWND createButton(HWND parent, int id, const wchar_t *text, int x, int y, int w,
 
 HWND createCheck(HWND parent, int id, const wchar_t *text, int x, int y, int w,
                  int h, bool checked) {
-  return CreateWindowExW(
-      0, L"BUTTON", text,
-      WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX | (checked ? BST_CHECKED : 0), x,
-      y, w, h, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
-      nullptr, nullptr);
+  HWND control = CreateWindowExW(
+      0, L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, x, y, w, h,
+      parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), nullptr,
+      nullptr);
+  if (checked) {
+    CheckDlgButton(parent, id, BST_CHECKED);
+  }
+  return control;
 }
 
 std::wstring exeBasename(const std::wstring &path) {
@@ -158,11 +166,12 @@ std::wstring exeBasename(const std::wstring &path) {
 }
 
 void setupListColumns(HWND listView, int dpi) {
-  ListView_SetExtendedListViewStyle(listView, LVS_EX_FULLROWSELECT);
+  ListView_SetExtendedListViewStyle(
+      listView, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_DOUBLEBUFFER);
   LVCOLUMNW col{};
   col.mask = LVCF_TEXT | LVCF_WIDTH;
   col.pszText = const_cast<wchar_t *>(L"Title");
-  col.cx = guiPx(220, dpi);
+  col.cx = guiPx(200, dpi);
   ListView_InsertColumn(listView, 0, &col);
   col.pszText = const_cast<wchar_t *>(L"EXE");
   col.cx = guiPx(100, dpi);
@@ -179,6 +188,18 @@ void setupListColumns(HWND listView, int dpi) {
 }
 
 void updateSelectedWindowDisplay(HWND hwnd);
+
+std::vector<int> getCheckedListRows(HWND listView) {
+  std::vector<int> rows;
+  const int count = ListView_GetItemCount(listView);
+  rows.reserve(static_cast<size_t>(count));
+  for (int row = 0; row < count; ++row) {
+    if (ListView_GetCheckState(listView, row) == TRUE) {
+      rows.push_back(row);
+    }
+  }
+  return rows;
+}
 
 void refreshWindowList(HWND hwnd) {
   const HWND listView = GetDlgItem(hwnd, IDC_LIST);
@@ -222,28 +243,38 @@ void refreshWindowList(HWND hwnd) {
 void updateSelectedWindowDisplay(HWND hwnd) {
   const HWND listView = GetDlgItem(hwnd, IDC_LIST);
   const HWND selectedLabel = GetDlgItem(hwnd, IDC_SELECTED);
-  const int row = ListView_GetNextItem(listView, -1, LVNI_SELECTED);
-  if (row < 0) {
-    setWindowText(selectedLabel, L"Selected: (none)");
+
+  const std::vector<int> rows = getCheckedListRows(listView);
+
+  if (rows.empty()) {
+    setWindowText(selectedLabel, L"Checked: (none)");
     return;
   }
 
-  wchar_t title[512]{};
-  wchar_t exe[256]{};
-  wchar_t pid[32]{};
-  ListView_GetItemText(listView, row, 0, title, 512);
-  ListView_GetItemText(listView, row, 1, exe, 256);
-  ListView_GetItemText(listView, row, 3, pid, 32);
+  if (rows.size() == 1) {
+    const int row = rows.front();
+    wchar_t title[512]{};
+    wchar_t exe[256]{};
+    wchar_t pid[32]{};
+    ListView_GetItemText(listView, row, 0, title, 512);
+    ListView_GetItemText(listView, row, 1, exe, 256);
+    ListView_GetItemText(listView, row, 3, pid, 32);
 
-  LVITEMW item{};
-  item.mask = LVIF_PARAM;
-  item.iItem = row;
-  ListView_GetItem(listView, &item);
+    LVITEMW item{};
+    item.mask = LVIF_PARAM;
+    item.iItem = row;
+    ListView_GetItem(listView, &item);
+
+    std::wostringstream text;
+    text << L"Checked: " << title << L"  (" << exe << L", PID " << pid
+         << L", HWND 0x" << std::hex << std::uppercase
+         << static_cast<unsigned long long>(item.lParam) << L')';
+    setWindowText(selectedLabel, text.str());
+    return;
+  }
 
   std::wostringstream text;
-  text << L"Selected: " << title << L"  (" << exe << L", PID " << pid
-       << L", HWND 0x" << std::hex << std::uppercase
-       << static_cast<unsigned long long>(item.lParam) << L')';
+  text << L"Checked: " << rows.size() << L" windows";
   setWindowText(selectedLabel, text.str());
 }
 
@@ -341,6 +372,7 @@ void setRecordingUi(HWND hwnd, bool recording) {
   EnableWindow(GetDlgItem(hwnd, IDC_LIST), !recording ? TRUE : FALSE);
   EnableWindow(GetDlgItem(hwnd, IDC_REFRESH), !recording ? TRUE : FALSE);
   EnableWindow(GetDlgItem(hwnd, IDC_SHOW_ALL), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_LAYOUT), !recording ? TRUE : FALSE);
   const bool canOpenRecent =
       !recording && g_state != nullptr && !g_state->lastRecordedPath.empty();
   EnableWindow(GetDlgItem(hwnd, IDC_OPEN_RECENT), canOpenRecent ? TRUE : FALSE);
@@ -364,22 +396,35 @@ void openRecentVideo(HWND hwnd) {
   }
 }
 
+std::wstring layoutNameFromIndex(int index) {
+  static const wchar_t *kNames[] = {L"auto", L"grid", L"horizontal",
+                                    L"vertical"};
+  if (index < 0 || index >= 4) {
+    return L"auto";
+  }
+  return kNames[index];
+}
+
 Result<RecordOptions> buildRecordOptions(HWND hwnd) {
   const HWND listView = GetDlgItem(hwnd, IDC_LIST);
-  const int selected = ListView_GetNextItem(listView, -1, LVNI_SELECTED);
-  if (selected < 0) {
-    return Result<RecordOptions>::fail("Select a window to record");
-  }
-
-  LVITEMW item{};
-  item.mask = LVIF_PARAM;
-  item.iItem = selected;
-  if (!ListView_GetItem(listView, &item)) {
-    return Result<RecordOptions>::fail("Failed to read selected window");
+  const std::vector<int> rows = getCheckedListRows(listView);
+  if (rows.empty()) {
+    return Result<RecordOptions>::fail("Check at least one window to record");
   }
 
   RecordOptions options{};
-  options.hwnd = static_cast<unsigned long long>(item.lParam);
+  for (int row : rows) {
+    LVITEMW item{};
+    item.mask = LVIF_PARAM;
+    item.iItem = row;
+    if (!ListView_GetItem(listView, &item)) {
+      return Result<RecordOptions>::fail("Failed to read checked window");
+    }
+    options.hwnds.push_back(static_cast<unsigned long long>(item.lParam));
+  }
+
+  options.layout = layoutNameFromIndex(static_cast<int>(
+      SendMessageW(GetDlgItem(hwnd, IDC_LAYOUT), CB_GETCURSEL, 0, 0)));
   options.outputPath = getWindowTextString(GetDlgItem(hwnd, IDC_OUTPUT_FILE));
   options.outputDir = getWindowTextString(GetDlgItem(hwnd, IDC_OUTPUT_DIR));
   options.preset = presetNameFromIndex(static_cast<int>(
@@ -434,6 +479,47 @@ Result<RecordOptions> buildRecordOptions(HWND hwnd) {
   return Result<RecordOptions>::ok(std::move(options));
 }
 
+void requestStopAndSave(bool closeAfterSave) {
+  if (g_state == nullptr || !g_state->recording.load()) {
+    return;
+  }
+  g_state->stopRequested.store(true);
+  g_state->closePending = closeAfterSave;
+  setStatus(L"Stopping and saving...");
+}
+
+BOOL WINAPI guiConsoleCtrlHandler(DWORD ctrlType) {
+  if (g_state == nullptr) {
+    return FALSE;
+  }
+  switch (ctrlType) {
+  case CTRL_C_EVENT:
+  case CTRL_BREAK_EVENT:
+  case CTRL_CLOSE_EVENT:
+    if (g_state->recording.load()) {
+      requestStopAndSave(true);
+      return TRUE;
+    }
+    return FALSE;
+  default:
+    return FALSE;
+  }
+}
+
+void dispatchGuiHotkey(int hotkeyId) {
+  if (g_state == nullptr || !g_state->recording.load()) {
+    return;
+  }
+  const HotkeyAction action = hotkeyActionFromId(hotkeyId);
+  if (action == HotkeyAction::None) {
+    return;
+  }
+  g_state->pendingHotkey.store(static_cast<int>(action));
+  if (action == HotkeyAction::Quit) {
+    g_state->stopRequested.store(true);
+  }
+}
+
 void startRecording(HWND hwnd) {
   if (g_state == nullptr || g_state->recording.load()) {
     return;
@@ -445,17 +531,29 @@ void startRecording(HWND hwnd) {
   }
 
   g_state->stopRequested.store(false);
+  g_state->pendingHotkey.store(static_cast<int>(HotkeyAction::None));
+  g_state->guiHotkeysRegistered = false;
+
+  const RecordOptions options = optionsResult.value();
+  if (options.hotkeys) {
+    if (auto st = registerHotKeys(hwnd); !st.isOk()) {
+      setStatus(utf8ToWide(st.error()));
+      return;
+    }
+    g_state->guiHotkeysRegistered = true;
+  }
+
   g_state->recording.store(true);
   setRecordingUi(hwnd, true);
   setStatus(L"Recording...");
 
-  const RecordOptions options = optionsResult.value();
   if (g_state->recordThread.joinable()) {
     g_state->recordThread.join();
   }
   g_state->recordThread = std::thread([hwnd, options]() {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
-    const Status result = runRecorder(options, &g_state->stopRequested);
+    const Status result =
+        runRecorder(options, &g_state->stopRequested, &g_state->pendingHotkey);
     winrt::uninit_apartment();
     auto *payload = new RecordDonePayload{};
     payload->ok = result.isOk();
@@ -468,17 +566,17 @@ void startRecording(HWND hwnd) {
   });
 }
 
-void stopRecording() {
-  if (g_state != nullptr) {
-    g_state->stopRequested.store(true);
-    setStatus(L"Stopping...");
-  }
-}
+void stopRecording() { requestStopAndSave(false); }
 
 void onRecordDone(HWND hwnd, RecordDonePayload *payload) {
   if (g_state == nullptr) {
     delete payload;
     return;
+  }
+  if (g_state->guiHotkeysRegistered) {
+    unregisterHotKeys(hwnd);
+    g_state->guiHotkeysRegistered = false;
+    g_state->pendingHotkey.store(static_cast<int>(HotkeyAction::None));
   }
   if (g_state->recordThread.joinable()) {
     g_state->recordThread.join();
@@ -494,6 +592,10 @@ void onRecordDone(HWND hwnd, RecordDonePayload *payload) {
   }
   setRecordingUi(hwnd, false);
   delete payload;
+  if (g_state->closePending) {
+    g_state->closePending = false;
+    PostMessageW(hwnd, WM_CLOSE, 0, 0);
+  }
 }
 
 void createChildControls(HWND hwnd) {
@@ -509,34 +611,48 @@ void createChildControls(HWND hwnd) {
               px(22), false);
 
   CreateWindowExW(0, WC_LISTVIEWW, L"",
-                  WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL |
-                      LVS_SHOWSELALWAYS,
+                  WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS,
                   margin, px(36), innerW, px(160), hwnd,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LIST)),
                   nullptr, nullptr);
 
-  CreateWindowExW(0, L"STATIC", L"Selected: (none)",
+  CreateWindowExW(0, L"STATIC", L"Checked: (none)",
                   WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS, margin, px(200),
                   innerW, px(18), hwnd,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_SELECTED)),
                   nullptr, nullptr);
 
-  createLabel(hwnd, L"Output file:", margin, px(224), px(84), px(18));
-  createEdit(hwnd, IDC_OUTPUT_FILE, px(92), px(220), editW, px(24));
-  createButton(hwnd, IDC_BROWSE_FILE, L"Browse...", margin + px(92) + editW,
-               px(218), browseW, px(26));
+  createLabel(hwnd, L"Layout:", margin, px(224), px(52), px(18));
+  const HWND layoutCombo =
+      CreateWindowExW(0, L"COMBOBOX", L"",
+                      WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                      px(64), px(220), px(108), px(120), hwnd,
+                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LAYOUT)),
+                      nullptr, nullptr);
+  SendMessageW(layoutCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"auto"));
+  SendMessageW(layoutCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"grid"));
+  SendMessageW(layoutCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"horizontal"));
+  SendMessageW(layoutCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"vertical"));
+  SendMessageW(layoutCombo, CB_SETCURSEL, 0, 0);
 
-  createLabel(hwnd, L"Output dir:", margin, px(252), px(84), px(18));
-  createEdit(hwnd, IDC_OUTPUT_DIR, px(92), px(248), editW, px(24));
-  setWindowText(GetDlgItem(hwnd, IDC_OUTPUT_DIR), defaultOutputDir());
-  createButton(hwnd, IDC_BROWSE_DIR, L"Browse...", margin + px(92) + editW,
+  createLabel(hwnd, L"Output file:", margin, px(252), px(84), px(18));
+  createEdit(hwnd, IDC_OUTPUT_FILE, px(92), px(248), editW, px(24));
+  createButton(hwnd, IDC_BROWSE_FILE, L"Browse...", margin + px(92) + editW,
                px(246), browseW, px(26));
 
-  createLabel(hwnd, L"Preset:", margin, px(282), px(52), px(18));
+  createLabel(hwnd, L"Output dir:", margin, px(280), px(84), px(18));
+  createEdit(hwnd, IDC_OUTPUT_DIR, px(92), px(276), editW, px(24));
+  setWindowText(GetDlgItem(hwnd, IDC_OUTPUT_DIR), defaultOutputDir());
+  createButton(hwnd, IDC_BROWSE_DIR, L"Browse...", margin + px(92) + editW,
+               px(274), browseW, px(26));
+
+  createLabel(hwnd, L"Preset:", margin, px(310), px(52), px(18));
   const HWND preset =
       CreateWindowExW(0, L"COMBOBOX", L"",
                       WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-                      px(64), px(278), px(108), px(160), hwnd,
+                      px(64), px(306), px(108), px(160), hwnd,
                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PRESET)),
                       nullptr, nullptr);
   SendMessageW(preset, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"low"));
@@ -546,43 +662,43 @@ void createChildControls(HWND hwnd) {
   SendMessageW(preset, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"extreme"));
   SendMessageW(preset, CB_SETCURSEL, 1, 0);
 
-  createLabel(hwnd, L"FPS:", px(184), px(282), px(36), px(18));
-  createEdit(hwnd, IDC_FPS, px(220), px(278), px(52), px(24));
-  createLabel(hwnd, L"Bitrate:", px(280), px(282), px(56), px(18));
-  createEdit(hwnd, IDC_BITRATE, px(340), px(278), px(84), px(24));
+  createLabel(hwnd, L"FPS:", px(184), px(310), px(36), px(18));
+  createEdit(hwnd, IDC_FPS, px(220), px(306), px(52), px(24));
+  createLabel(hwnd, L"Bitrate:", px(280), px(310), px(56), px(18));
+  createEdit(hwnd, IDC_BITRATE, px(340), px(306), px(84), px(24));
 
-  createCheck(hwnd, IDC_CURSOR, L"Cursor", margin, px(310), px(88), px(22),
+  createCheck(hwnd, IDC_CURSOR, L"Cursor", margin, px(338), px(88), px(22),
               true);
-  createCheck(hwnd, IDC_HOTKEYS, L"Hotkeys", px(104), px(310), px(92), px(22),
+  createCheck(hwnd, IDC_HOTKEYS, L"Hotkeys", px(104), px(338), px(92), px(22),
               true);
-  createCheck(hwnd, IDC_START_PAUSED, L"Start paused", px(204), px(310),
+  createCheck(hwnd, IDC_START_PAUSED, L"Start paused", px(204), px(338),
               px(132), px(22), false);
-  createLabel(hwnd, L"Speed:", px(344), px(312), px(52), px(18));
-  createEdit(hwnd, IDC_SPEED, px(400), px(308), px(52), px(24));
+  createLabel(hwnd, L"Speed:", px(344), px(340), px(52), px(18));
+  createEdit(hwnd, IDC_SPEED, px(400), px(336), px(52), px(24));
   setWindowText(GetDlgItem(hwnd, IDC_SPEED), L"1");
 
-  createButton(hwnd, IDC_START, L"Start Recording", margin, px(340), px(144),
+  createButton(hwnd, IDC_START, L"Start Recording", margin, px(368), px(144),
                px(30));
-  createButton(hwnd, IDC_STOP, L"Stop", px(160), px(340), px(88), px(30));
-  createButton(hwnd, IDC_OPEN_RECENT, L"Play Recent", px(256), px(340), px(120),
+  createButton(hwnd, IDC_STOP, L"Stop", px(160), px(368), px(88), px(30));
+  createButton(hwnd, IDC_OPEN_RECENT, L"Play Recent", px(256), px(368), px(120),
                px(30));
   EnableWindow(GetDlgItem(hwnd, IDC_STOP), FALSE);
   EnableWindow(GetDlgItem(hwnd, IDC_OPEN_RECENT), FALSE);
 
   CreateWindowExW(0, L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE, margin,
-                  px(376), innerW, px(18), hwnd,
+                  px(404), innerW, px(18), hwnd,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STATUS)),
                   nullptr, nullptr);
 
   const int installBtnW = px(92);
   const int installEditW = innerW - px(84) - installBtnW;
-  createLabel(hwnd, L"Install dir:", margin, px(418), px(80), px(18));
-  createEdit(hwnd, IDC_INSTALL_DIR, px(88), px(414), installEditW, px(24));
+  createLabel(hwnd, L"Install dir:", margin, px(446), px(80), px(18));
+  createEdit(hwnd, IDC_INSTALL_DIR, px(88), px(442), installEditW, px(24));
   setWindowText(GetDlgItem(hwnd, IDC_INSTALL_DIR), defaultInstallDir());
   createButton(hwnd, IDC_INSTALL, L"Install", margin + px(88) + installEditW,
-               px(412), installBtnW, px(28));
+               px(440), installBtnW, px(28));
   createButton(hwnd, IDC_UNINSTALL, L"Uninstall",
-               margin + px(88) + installEditW, px(444), installBtnW, px(28));
+               margin + px(88) + installEditW, px(472), installBtnW, px(28));
 
   setupListColumns(GetDlgItem(hwnd, IDC_LIST), dpi);
   applyPresetFields(hwnd);
@@ -674,7 +790,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (hdr->idFrom == IDC_LIST && hdr->code == LVN_ITEMCHANGED) {
       const auto *nm = reinterpret_cast<LPNMLISTVIEW>(lParam);
       if ((nm->uChanged & LVIF_STATE) != 0) {
-        updateSelectedWindowDisplay(hwnd);
+        const UINT oldCheck = nm->uOldState & LVIS_STATEIMAGEMASK;
+        const UINT newCheck = nm->uNewState & LVIS_STATEIMAGEMASK;
+        if (oldCheck != newCheck) {
+          updateSelectedWindowDisplay(hwnd);
+        }
       }
     }
     return 0;
@@ -687,12 +807,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     return 0;
   }
+  case WM_HOTKEY:
+    if (g_state != nullptr && g_state->guiHotkeysRegistered) {
+      dispatchGuiHotkey(static_cast<int>(wParam));
+      return 0;
+    }
+    break;
   case WM_APP_RECORD_DONE:
     onRecordDone(hwnd, reinterpret_cast<RecordDonePayload *>(lParam));
     return 0;
   case WM_CLOSE:
     if (g_state != nullptr && g_state->recording.load()) {
-      g_state->stopRequested.store(true);
+      requestStopAndSave(true);
       return 0;
     }
     DestroyWindow(hwnd);
@@ -761,6 +887,8 @@ int runGui() {
   ShowWindow(state.hwnd, SW_SHOW);
   UpdateWindow(state.hwnd);
 
+  SetConsoleCtrlHandler(guiConsoleCtrlHandler, TRUE);
+
   MSG msg{};
   while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
     TranslateMessage(&msg);
@@ -774,6 +902,7 @@ int runGui() {
     state.recordThread.join();
   }
 
+  SetConsoleCtrlHandler(nullptr, FALSE);
   logSetGuiSink({});
   g_state = nullptr;
   if (SUCCEEDED(oleHr)) {

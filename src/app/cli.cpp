@@ -5,12 +5,13 @@
 #include "path_install.h"
 #include "record_options.h"
 #include "recorder.h"
+#include "scene.h"
 #include "window_list.h"
-
 
 #include <Windows.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cwchar>
 #include <iostream>
 #include <sstream>
@@ -74,6 +75,71 @@ double parseSpeed(const std::wstring &text) {
   return std::stod(s);
 }
 
+bool parseCanvasSize(const std::wstring &text, uint32_t &width,
+                     uint32_t &height) {
+  const size_t xPos = text.find(L'x');
+  if (xPos == std::wstring::npos) {
+    const size_t XPos = text.find(L'X');
+    if (XPos == std::wstring::npos) {
+      return false;
+    }
+    width = static_cast<uint32_t>(parseInt(text.substr(0, XPos)));
+    height = static_cast<uint32_t>(parseInt(text.substr(XPos + 1)));
+    return width > 0 && height > 0;
+  }
+  width = static_cast<uint32_t>(parseInt(text.substr(0, xPos)));
+  height = static_cast<uint32_t>(parseInt(text.substr(xPos + 1)));
+  return width > 0 && height > 0;
+}
+
+Result<CustomSourceSpec> parseCustomSourceSpec(const std::wstring &text) {
+  CustomSourceSpec spec{};
+  std::wstringstream ss(text);
+  std::wstring token;
+  while (std::getline(ss, token, L',')) {
+    const size_t eq = token.find(L'=');
+    if (eq == std::wstring::npos) {
+      return Result<CustomSourceSpec>::fail("Invalid --source entry: " +
+                                            wideToUtf8(text));
+    }
+    const std::wstring key = token.substr(0, eq);
+    const std::wstring value = token.substr(eq + 1);
+    if (equalsIgnoreCase(key, L"hwnd")) {
+      spec.hwnd = parseU64(value);
+    } else if (equalsIgnoreCase(key, L"pid")) {
+      spec.pid = parseU32(value);
+    } else if (equalsIgnoreCase(key, L"title")) {
+      spec.title = value;
+    } else if (equalsIgnoreCase(key, L"x")) {
+      spec.x = parseInt(value);
+    } else if (equalsIgnoreCase(key, L"y")) {
+      spec.y = parseInt(value);
+    } else if (equalsIgnoreCase(key, L"w")) {
+      spec.w = parseInt(value);
+    } else if (equalsIgnoreCase(key, L"h")) {
+      spec.h = parseInt(value);
+    } else if (equalsIgnoreCase(key, L"scale")) {
+      spec.scale = parseScaleMode(value);
+    } else {
+      return Result<CustomSourceSpec>::fail("Unknown --source key: " +
+                                            wideToUtf8(key));
+    }
+  }
+  if (spec.hwnd == 0 && spec.pid == 0 && spec.title.empty()) {
+    return Result<CustomSourceSpec>::fail(
+        "--source requires hwnd, pid, or title");
+  }
+  if (spec.w <= 0 || spec.h <= 0) {
+    return Result<CustomSourceSpec>::fail("--source requires positive w and h");
+  }
+  return Result<CustomSourceSpec>::ok(std::move(spec));
+}
+
+int countTargets(const RecordOptions &options) {
+  return static_cast<int>(options.hwnds.size() + options.pids.size() +
+                          options.titles.size() + options.customSources.size());
+}
+
 bool isListCommand(const std::wstring &sub) {
   return sub == L"list" || sub == L"l";
 }
@@ -102,19 +168,34 @@ Result<ParsedCommand> parseListArgs(ParsedCommand cmd, int argc,
 
 Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
                                       wchar_t *argv[]) {
-  int targetCount = 0;
   for (int i = 2; i < argc; ++i) {
     const std::wstring arg = argv[i];
     try {
       if (isFlag(arg, L"--hwnd", L'w')) {
-        cmd.record.hwnd = parseU64(requireValue(i, argc, argv, "-w/--hwnd"));
-        ++targetCount;
+        cmd.record.hwnds.push_back(
+            parseU64(requireValue(i, argc, argv, "-w/--hwnd")));
       } else if (isFlag(arg, L"--pid", L'p')) {
-        cmd.record.pid = parseU32(requireValue(i, argc, argv, "-p/--pid"));
-        ++targetCount;
+        cmd.record.pids.push_back(
+            parseU32(requireValue(i, argc, argv, "-p/--pid")));
       } else if (isFlag(arg, L"--title", L't')) {
-        cmd.record.title = requireValue(i, argc, argv, "-t/--title");
-        ++targetCount;
+        cmd.record.titles.push_back(requireValue(i, argc, argv, "-t/--title"));
+      } else if (arg == L"--layout") {
+        cmd.record.layout = requireValue(i, argc, argv, "--layout");
+      } else if (arg == L"--canvas") {
+        const std::wstring canvas = requireValue(i, argc, argv, "--canvas");
+        if (!parseCanvasSize(canvas, cmd.record.canvasWidth,
+                             cmd.record.canvasHeight)) {
+          return Result<ParsedCommand>::fail(
+              "--canvas expects WxH (e.g. 1920x1080)");
+        }
+      } else if (arg == L"--source") {
+        const auto spec =
+            parseCustomSourceSpec(requireValue(i, argc, argv, "--source"));
+        if (!spec.isOk()) {
+          return Result<ParsedCommand>::fail(spec.error());
+        }
+        cmd.record.customSources.push_back(spec.value());
+        cmd.record.layout = L"custom";
       } else if (isFlag(arg, L"--out", L'o')) {
         cmd.record.outputPath = requireValue(i, argc, argv, "-o/--out");
       } else if (isFlag(arg, L"--output-dir", L'd')) {
@@ -162,9 +243,18 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
     }
   }
 
-  if (targetCount != 1) {
+  if (countTargets(cmd.record) < 1) {
     return Result<ParsedCommand>::fail(
-        "Specify exactly one of -w/--hwnd, -p/--pid, or -t/--title");
+        "Specify at least one of -w/--hwnd, -p/--pid, -t/--title, or --source");
+  }
+  if (!cmd.record.customSources.empty() &&
+      (cmd.record.canvasWidth == 0 || cmd.record.canvasHeight == 0)) {
+    return Result<ParsedCommand>::fail("Custom layout requires --canvas WxH");
+  }
+  if (parseLayoutKind(cmd.record.layout) == LayoutKind::Custom &&
+      cmd.record.customSources.empty()) {
+    return Result<ParsedCommand>::fail(
+        "--layout custom requires one or more --source entries");
   }
   const auto outputResult = resolveRecordOutputPath(cmd.record);
   if (!outputResult.isOk()) {
@@ -210,8 +300,8 @@ void printUsage() {
   std::cout << "wrec - Windows CLI screen recorder\n\n"
                "Usage:\n"
                "  wrec list|l [-a] [-j] [-v]\n"
-               "  wrec record|rec|r (-w <HWND> | -p <PID> | -t <text>) [-o "
-               "<file.mp4>] [options]\n"
+               "  wrec record|rec|r (-w <HWND> | -p <PID> | -t <text> | "
+               "--source ...) [-o <file.mp4>] [options]\n"
                "  wrec gui\n"
                "  wrec install [-d <dir>] [-v]\n"
                "  wrec uninstall [-d <dir>] [-v]\n\n"
@@ -220,9 +310,16 @@ void printUsage() {
                "  -j, --json             JSON output\n"
                "  -v, --verbose          Verbose logging\n\n"
                "Record options:\n"
-               "  -w, --hwnd <HWND>      Target window handle\n"
-               "  -p, --pid <PID>        Target process ID\n"
-               "  -t, --title <text>     Partial window title match\n"
+               "  -w, --hwnd <HWND>      Target window handle (repeatable)\n"
+               "  -p, --pid <PID>        Target process ID (repeatable)\n"
+               "  -t, --title <text>     Partial window title match "
+               "(repeatable)\n"
+               "      --layout <mode>    auto, grid, horizontal, vertical, "
+               "custom (default: auto)\n"
+               "      --canvas <WxH>     Output canvas size (required for "
+               "custom layout)\n"
+               "      --source <spec>    Custom placement: "
+               "hwnd=...,x=...,y=...,w=...,h=[,scale=fit|fill|stretch]\n"
                "  -o, --out <file.mp4>   Output file (default: auto-named in "
                "output folder)\n"
                "  -d, --output-dir <dir> Output folder (default: current "
@@ -240,6 +337,12 @@ void printUsage() {
                "1, e.g. 0.9, 2x)\n"
                "  -v, --verbose          Verbose logging\n"
                "  -j, --json             JSON events on stderr\n\n"
+               "Multi-window examples:\n"
+               "  wrec r -t Chrome -t \"Visual Studio Code\" -o session.mp4\n"
+               "  wrec r -t Chrome -t Notepad --layout horizontal -o dual.mp4\n"
+               "  wrec r -w 0x123 -w 0x456 --layout grid -o grid.mp4\n"
+               "  wrec r --canvas 1920x1080 --source hwnd=0x123,x=0,y=0,w=960,"
+               "h=540 -o custom.mp4\n\n"
                "Install options:\n"
                "  -d, --dir <path>       Install directory (default: "
                "%USERPROFILE%\\.local\\bin)\n"
@@ -291,6 +394,28 @@ Result<ParsedCommand> parseCommandLine(int argc, wchar_t *argv[]) {
   return Result<ParsedCommand>::fail("Unknown command: " + wideToUtf8(sub));
 }
 
+namespace {
+
+std::atomic<bool> *g_cliStopRequested = nullptr;
+
+BOOL WINAPI cliConsoleCtrlHandler(DWORD ctrlType) {
+  if (g_cliStopRequested == nullptr) {
+    return FALSE;
+  }
+  switch (ctrlType) {
+  case CTRL_C_EVENT:
+  case CTRL_BREAK_EVENT:
+  case CTRL_CLOSE_EVENT:
+    g_cliStopRequested->store(true);
+    logMessage(LogLevel::Info, "Stopping and saving...");
+    return TRUE;
+  default:
+    return FALSE;
+  }
+}
+
+} // namespace
+
 int runCommand(const ParsedCommand &command) {
   switch (command.kind) {
   case ParsedCommand::Kind::Help:
@@ -309,7 +434,12 @@ int runCommand(const ParsedCommand &command) {
   case ParsedCommand::Kind::Record: {
     logSetVerbose(command.record.verbose);
     logSetJson(command.record.json);
-    const auto result = runRecorder(command.record);
+    std::atomic<bool> stopRequested{false};
+    g_cliStopRequested = &stopRequested;
+    SetConsoleCtrlHandler(cliConsoleCtrlHandler, TRUE);
+    const auto result = runRecorder(command.record, &stopRequested);
+    SetConsoleCtrlHandler(nullptr, FALSE);
+    g_cliStopRequested = nullptr;
     if (!result.isOk()) {
       logMessage(LogLevel::Error, result.error());
       return 1;

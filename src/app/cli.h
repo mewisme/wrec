@@ -1,8 +1,10 @@
 #pragma once
 
 #include "result.h"
+#include "scene.h"
 
 #include <string>
+#include <vector>
 
 struct ListOptions {
   bool all = false;
@@ -11,9 +13,13 @@ struct ListOptions {
 };
 
 struct RecordOptions {
-  unsigned long long hwnd = 0;
-  unsigned long pid = 0;
-  std::wstring title;
+  std::vector<unsigned long long> hwnds;
+  std::vector<unsigned long> pids;
+  std::vector<std::wstring> titles;
+  std::wstring layout = L"auto";
+  uint32_t canvasWidth = 0;
+  uint32_t canvasHeight = 0;
+  std::vector<CustomSourceSpec> customSources;
   std::wstring outputPath;
   std::wstring outputDir;
   std::wstring preset = L"medium";

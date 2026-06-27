@@ -1,0 +1,41 @@
+---
+description: Run build.ps1 after code changes to verify the project compiles
+alwaysApply: true
+---
+
+# Build verification
+
+After finishing a task that changes source, headers, or CMake files, run the project build before marking the work done.
+
+## When to run
+
+Run `.\build.ps1` from the repo root when you:
+
+- Added, edited, or removed `.cpp`, `.h`, or `CMakeLists.txt`
+- Fixed a bug or implemented a feature in wrec source
+
+Skip the build when you:
+
+- Only changed docs, comments, or `.cursor/rules/`
+- Only answered a question with no code edits
+- The user explicitly asked not to build
+
+## How to run
+
+```powershell
+.\build.ps1
+```
+
+Use the Shell tool with `working_directory` set to the project root (`F:/Project/cpp/wrec` or `$PSScriptRoot` equivalent).
+
+Default is Ninja + Release (matches CI). Use `.\build.ps1 -Clean` only when configure/cache issues are suspected.
+
+## On failure
+
+- Read compiler/linker errors from the output
+- Fix the root cause in source, not symptoms at one call site
+- Re-run `.\build.ps1` until it succeeds or you hit an environment blocker (missing VS, cmake, ninja) — report blockers clearly to the user
+
+## Done criteria
+
+A coding task is not complete until `build.ps1` exits 0, or you documented why a build could not run in this environment.

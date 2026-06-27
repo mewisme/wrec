@@ -29,9 +29,14 @@ add_executable(wrec
     src/capture/window_list.cpp
     src/capture/capture_wgc.cpp
     src/capture/capture_printwindow.cpp
+    src/capture/capture_source.cpp
     src/capture/d3d_device.cpp
     src/capture/cursor_overlay.cpp
+    src/scene/scene.cpp
+    src/scene/compositor.cpp
     src/record/hotkeys.cpp
+    src/record/frame_synchronizer.cpp
+    src/record/recorder_manager.cpp
     src/record/recorder.cpp
     src/record/mf_encoder.cpp
 )
@@ -41,6 +46,7 @@ target_include_directories(wrec PRIVATE
     src/app
     src/core
     src/capture
+    src/scene
     src/record
 )
 

@@ -1,23 +1,18 @@
 #pragma once
 
-#include "cli.h"
 #include "result.h"
+#include "window_info.h"
 
 #include <Windows.h>
 
 #include <string>
 #include <vector>
 
-struct WindowInfo {
-  unsigned long pid = 0;
-  HWND hwnd = nullptr;
-  std::wstring exePath;
-  std::wstring title;
-  int width = 0;
-  int height = 0;
-  bool visible = false;
-};
+struct ListOptions;
+struct RecordOptions;
 
 Status listWindows(const ListOptions &options);
 Result<WindowInfo> resolveTargetWindow(const RecordOptions &options);
+Result<std::vector<WindowInfo>>
+resolveTargetWindows(const RecordOptions &options);
 std::vector<WindowInfo> enumerateWindows(bool includeAll);
