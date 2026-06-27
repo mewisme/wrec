@@ -82,7 +82,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Tag names must start with `v` (e.g. `v1.0.0`, `v0.2.1`). The release workflow builds `wrec.exe` and publishes `wrec-<version>-windows-x64.zip`.
+Tag names must start with `v` (e.g. `v1.0.0`, `v0.2.1`). The release workflow builds `wrec.exe` and publishes `wrec-<version>-windows-x64.zip` (includes `open-terminal-here.bat` to open cmd in the extract folder).
 
 ## Usage
 

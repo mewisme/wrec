@@ -39,6 +39,7 @@ jobs:
           Copy-Item build/wrec.exe $dir/
           Copy-Item README.md $dir/
           Copy-Item LICENSE $dir/
+          Copy-Item scripts/open-terminal-here.bat $dir/
           Compress-Archive -Path $dir/* -DestinationPath "dist/wrec-$version-windows-x64.zip"
 
       - name: Create GitHub Release
