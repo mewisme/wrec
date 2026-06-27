@@ -7,9 +7,9 @@
 #include "recorder.h"
 #include "window_list.h"
 
+#include <Windows.h>
 #include <winrt/base.h>
 
-#include <Windows.h>
 #include <commctrl.h>
 #include <commdlg.h>
 #include <shellapi.h>

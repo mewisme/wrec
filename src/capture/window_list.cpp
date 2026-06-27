@@ -2,8 +2,8 @@
 
 #include "logging.h"
 
-#include <Psapi.h>
 #include <Windows.h>
+#include <Psapi.h>
 
 #include <algorithm>
 #include <cwctype>

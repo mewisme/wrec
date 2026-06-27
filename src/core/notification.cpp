@@ -8,9 +8,9 @@ namespace {
 constexpr UINT kTrayIconId = 1;
 
 HWND messageHostWindow() {
-  static HWND hwnd =
-      CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr,
-                      GetModuleHandleW(nullptr), nullptr);
+  static HWND hwnd = CreateWindowExW(
+      0, L"Message", nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr,
+      GetModuleHandleW(nullptr), nullptr);
   return hwnd;
 }
 
@@ -23,7 +23,8 @@ void notifyTrayBalloon(const std::wstring &title, const std::wstring &body) {
   }
 
   NOTIFYICONDATAW nid{};
-  nid.cbSize = sizeof(nid);
+  nid.cbSize = sizeof(NOTIFYICONDATAW);
+  nid.uVersion = NOTIFYICON_VERSION_4;
   nid.hWnd = hwnd;
   nid.uID = kTrayIconId;
   nid.uFlags = NIF_ICON | NIF_TIP;

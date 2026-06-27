@@ -3,7 +3,6 @@
 #include "logging.h"
 
 #include <Windows.h>
-#include <KnownFolders.h>
 #include <shlobj.h>
 
 #include <cwchar>
