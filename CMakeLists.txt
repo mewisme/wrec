@@ -13,6 +13,11 @@ if(MSVC)
     add_compile_options(/W4 /permissive-)
 endif()
 
+# Ninja/single-config generators: default to Release when unset
+if(NOT CMAKE_GENERATOR MATCHES "Visual Studio" AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 add_executable(wrec
     src/main.cpp
     src/cli.cpp

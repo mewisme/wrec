@@ -14,27 +14,55 @@ MIT — Copyright (c) 2026 Mew. See [LICENSE](LICENSE).
 
 ## Build
 
-Requires **Visual Studio 2022 or later** (or Build Tools) with the **Desktop development with C++** workload and Windows 10 SDK (18362+).
+Requires **Visual Studio 2022 or later** (or Build Tools) with **Desktop development with C++** and Windows 10 SDK (18362+).
+
+### Recommended — Ninja (same as CI)
+
+Install [Ninja](https://ninja-build.org/) once:
 
 ```powershell
-cmake -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
+winget install Ninja-build.Ninja
 ```
 
-Or with Ninja (same as CI):
+Then build (loads MSVC automatically via `VsDevCmd`; no Developer shell needed):
+
+```powershell
+.\build.ps1
+# → build\wrec.exe
+
+.\build.ps1 -Clean              # clean rebuild
+.\build.ps1 -Generator VisualStudio   # use VS solution instead → build-vs\Release\wrec.exe
+```
+
+Manual Ninja build (from **Developer PowerShell for VS**):
 
 ```powershell
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-Binary: `build\Release\wrec.exe` (Visual Studio generator) or `build\wrec.exe` (Ninja)
+### Visual Studio generator
+
+```powershell
+.\build.ps1 -Generator VisualStudio
+# or manually:
+cmake -B build-vs -G "Visual Studio 17 2022" -A x64
+cmake --build build-vs --config Release
+```
+
+| Generator | Output |
+|-----------|--------|
+| Ninja (default) | `build\wrec.exe` |
+| Visual Studio | `build-vs\Release\wrec.exe` |
 
 ### Install to PATH
 
 ```powershell
-# Copy to %USERPROFILE%\.local\bin and add to user PATH
-.\build\Release\wrec.exe install
+# After Ninja build:
+.\build\wrec.exe install
+
+# After VS generator build:
+.\build-vs\Release\wrec.exe install
 
 # Custom directory
 wrec install --dir D:\tools\bin

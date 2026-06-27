@@ -1,5 +1,8 @@
 /build/
+/build-vs/
+/build-ninja/
 /out/
+/dist/
 .codegraph/
 *.user
 *.suo
