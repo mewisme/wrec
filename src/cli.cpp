@@ -1,15 +1,17 @@
 #include "cli.h"
 
+#include "gui.h"
 #include "logging.h"
 #include "path_install.h"
+#include "record_options.h"
 #include "recorder.h"
 #include "window_list.h"
+
 
 #include <Windows.h>
 
 #include <algorithm>
 #include <cwchar>
-#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -78,132 +80,6 @@ bool isListCommand(const std::wstring &sub) {
 
 bool isRecordCommand(const std::wstring &sub) {
   return sub == L"record" || sub == L"rec" || sub == L"r";
-}
-
-bool isAbsolutePath(const std::wstring &path) {
-  return (path.size() >= 2 && path[1] == L':') ||
-         (path.size() >= 2 && path[0] == L'\\' && path[1] == L'\\');
-}
-
-std::wstring resolveOutputDir(const std::wstring &dir) {
-  if (!dir.empty()) {
-    return dir;
-  }
-  wchar_t cwd[MAX_PATH]{};
-  const DWORD n = GetCurrentDirectoryW(MAX_PATH, cwd);
-  if (n == 0 || n >= MAX_PATH) {
-    return L".";
-  }
-  return cwd;
-}
-
-std::wstring joinPath(const std::wstring &dir, const std::wstring &file) {
-  if (dir.empty()) {
-    return file;
-  }
-  if (isAbsolutePath(file)) {
-    return file;
-  }
-  if (dir.back() == L'\\' || dir.back() == L'/') {
-    return dir + file;
-  }
-  return dir + L'\\' + file;
-}
-
-std::wstring makeAutoOutputName() {
-  SYSTEMTIME st{};
-  GetLocalTime(&st);
-  std::wostringstream name;
-  name << L"wrec-" << std::setfill(L'0') << std::setw(4) << st.wYear
-       << std::setw(2) << st.wMonth << std::setw(2) << st.wDay << L'-'
-       << std::setw(2) << st.wHour << std::setw(2) << st.wMinute << std::setw(2)
-       << st.wSecond << L".mp4";
-  return name.str();
-}
-
-Status ensureDirectoryExists(const std::wstring &dir) {
-  if (dir.empty() || dir == L".") {
-    return Status::ok();
-  }
-  const DWORD attr = GetFileAttributesW(dir.c_str());
-  if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
-    return Status::ok();
-  }
-  if (CreateDirectoryW(dir.c_str(), nullptr)) {
-    return Status::ok();
-  }
-  if (GetLastError() == ERROR_ALREADY_EXISTS) {
-    return Status::ok();
-  }
-  return Status::fail("Cannot create output directory: " + wideToUtf8(dir));
-}
-
-Result<std::wstring> resolveRecordOutputPath(const RecordOptions &options) {
-  const std::wstring dir = resolveOutputDir(options.outputDir);
-  const bool customDir = !options.outputDir.empty();
-
-  if (options.outputPath.empty()) {
-    if (customDir) {
-      if (const auto st = ensureDirectoryExists(dir); !st.isOk()) {
-        return Result<std::wstring>::fail(st.error());
-      }
-    }
-    return Result<std::wstring>::ok(joinPath(dir, makeAutoOutputName()));
-  }
-
-  std::wstring path = options.outputPath;
-  if (customDir && !isAbsolutePath(path)) {
-    path = joinPath(dir, path);
-  }
-  if (customDir) {
-    const size_t pos = path.find_last_of(L"\\/");
-    const std::wstring parent =
-        pos != std::wstring::npos ? path.substr(0, pos) : dir;
-    if (const auto st = ensureDirectoryExists(parent); !st.isOk()) {
-      return Result<std::wstring>::fail(st.error());
-    }
-  }
-  return Result<std::wstring>::ok(std::move(path));
-}
-
-struct PresetValues {
-  int fps;
-  int bitrate;
-};
-
-Result<PresetValues> presetValues(const std::wstring &name) {
-  if (equalsIgnoreCase(name, L"low")) {
-    return Result<PresetValues>::ok({24, 2'000'000});
-  }
-  if (equalsIgnoreCase(name, L"medium")) {
-    return Result<PresetValues>::ok({30, 5'000'000});
-  }
-  if (equalsIgnoreCase(name, L"high")) {
-    return Result<PresetValues>::ok({45, 7'000'000});
-  }
-  if (equalsIgnoreCase(name, L"ultra")) {
-    return Result<PresetValues>::ok({60, 8'000'000});
-  }
-  if (equalsIgnoreCase(name, L"extreme")) {
-    return Result<PresetValues>::ok({60, 12'000'000});
-  }
-  return Result<PresetValues>::fail("Unknown preset: " + wideToUtf8(name) +
-                                    " (expected low, medium, high, ultra, or "
-                                    "extreme)");
-}
-
-void applyRecordPreset(RecordOptions &options) {
-  const auto preset = presetValues(options.preset);
-  if (!preset.isOk()) {
-    return;
-  }
-  const PresetValues values = preset.value();
-  if (!options.fpsExplicit) {
-    options.fps = values.fps;
-  }
-  if (!options.bitrateExplicit) {
-    options.bitrate = values.bitrate;
-  }
 }
 
 Result<ParsedCommand> parseListArgs(ParsedCommand cmd, int argc,
@@ -336,6 +212,7 @@ void printUsage() {
                "  wrec list|l [-a] [-j] [-v]\n"
                "  wrec record|rec|r (-w <HWND> | -p <PID> | -t <text>) [-o "
                "<file.mp4>] [options]\n"
+               "  wrec gui\n"
                "  wrec install [-d <dir>] [-v]\n"
                "  wrec uninstall [-d <dir>] [-v]\n\n"
                "List options:\n"
@@ -396,6 +273,11 @@ Result<ParsedCommand> parseCommandLine(int argc, wchar_t *argv[]) {
     return parseInstallArgs(std::move(cmd), argc, argv, false);
   }
 
+  if (sub == L"gui") {
+    cmd.kind = ParsedCommand::Kind::Gui;
+    return Result<ParsedCommand>::ok(std::move(cmd));
+  }
+
   if (sub == L"uninstall") {
     cmd.kind = ParsedCommand::Kind::Uninstall;
     return parseInstallArgs(std::move(cmd), argc, argv, true);
@@ -452,6 +334,8 @@ int runCommand(const ParsedCommand &command) {
     }
     return 0;
   }
+  case ParsedCommand::Kind::Gui:
+    return runGui();
   }
   return 1;
 }

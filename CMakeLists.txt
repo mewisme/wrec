@@ -31,6 +31,8 @@ add_executable(wrec
     src/mf_encoder.cpp
     src/logging.cpp
     src/path_install.cpp
+    src/record_options.cpp
+    src/gui.cpp
 )
 
 target_include_directories(wrec PRIVATE src)
@@ -45,9 +47,12 @@ target_link_libraries(wrec PRIVATE
     mfreadwrite
     mfuuid
     shlwapi
+    shell32
     psapi
     user32
     gdi32
+    comctl32
+    comdlg32
     ole32
     uuid
 )

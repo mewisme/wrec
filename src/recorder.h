@@ -3,4 +3,7 @@
 #include "cli.h"
 #include "result.h"
 
-Status runRecorder(const RecordOptions &options);
+#include <atomic>
+
+Status runRecorder(const RecordOptions &options,
+                   std::atomic<bool> *stopRequested = nullptr);

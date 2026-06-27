@@ -1,53 +1,168 @@
 # wrec
 
-Windows CLI screen recorder. Captures a specific top-level window using **Windows Graphics Capture** (works when the window is covered), overlays the mouse cursor manually, and encodes to **MP4/H.264** via Media Foundation.
+Record a single Windows window to MP4/H.264 — from the command line or a minimal GUI.
 
-## License
+wrec captures one top-level window (even when another window covers it), draws the mouse cursor manually, and writes H.264 via Media Foundation. No admin rights, no full-desktop capture.
 
-MIT — Copyright (c) 2026 Mew. See [LICENSE](LICENSE).
+## Features
+
+- **Window-targeted capture** — pick by title, PID, or HWND; not the whole screen
+- **Covered windows** — Windows Graphics Capture when visible; `PrintWindow` fallback when occluded
+- **CLI + GUI** — `wrec record …` or `wrec gui`
+- **Quality presets** — low → extreme; override FPS/bitrate anytime
+- **Auto output names** — `wrec-YYYYMMDD-HHMMSS.mp4` when `-o` is omitted
+- **Global hotkeys** — stop, pause, quit while recording
+- **PATH install** — `wrec install` copies to `%USERPROFILE%\.local\bin`
+
+## Quick start
+
+**From a [release zip](https://github.com/mewisme/wrec/releases)** (Windows x64):
+
+```powershell
+# Extract, then from that folder:
+.\wrec.exe list
+.\wrec.exe gui
+.\wrec.exe r -t "Notepad" -d .\captures
+```
+
+**From source** (see [Build](#build)):
+
+```powershell
+.\build.ps1
+.\build\wrec.exe list
+.\build\wrec.exe r -t "Notepad" -o demo.mp4
+```
 
 ## Requirements
 
-- Windows 10 version **1903** (build **18362**) or later
-- Visual Studio 2022 with **Desktop development with C++**
-- Windows 10 SDK (10.0.18362+)
+- Windows 10 **1903** (build **18362**) or later
+- To build: Visual Studio 2022+ (or Build Tools), **Desktop development with C++**, Windows 10 SDK 18362+
+
+## Install on PATH
+
+```powershell
+wrec install                    # → %USERPROFILE%\.local\bin
+wrec install --dir D:\tools\bin
+wrec uninstall
+```
+
+Restart your terminal after install/uninstall.
+
+## GUI
+
+```powershell
+wrec gui
+```
+
+The window lists capturable targets (Refresh, optional **Show all**). Select a row, set output path/dir and quality, then **Start Recording**. **Stop** or hotkeys finalize the file. **Play Recent** opens the last successful recording in your default video player.
+
+Install/uninstall controls are at the bottom of the same window.
+
+## CLI reference
+
+```text
+wrec list|l [options]
+wrec record|rec|r (-w <HWND> | -p <PID> | -t <title>) [options]
+wrec gui
+wrec install|uninstall [options]
+wrec help
+```
+
+### List windows
+
+```powershell
+wrec list              # alias: l
+wrec l -a              # include tool/invisible/shell windows
+wrec l -j              # JSON to stdout
+```
+
+### Record
+
+Pick **exactly one** target:
+
+```powershell
+wrec r -t "Notepad"                    # partial title match
+wrec r -p 1234 -o out.mp4              # largest visible window for PID
+wrec r -w 0x1050E                      # HWND from list
+```
+
+Output:
+
+```powershell
+wrec r -t "Notepad" -o demo.mp4        # explicit file
+wrec r -t "Notepad"                    # auto: wrec-YYYYMMDD-HHMMSS.mp4 (cwd)
+wrec r -t "Notepad" -d D:\captures     # auto name in folder
+wrec r -t "Notepad" -o clip.mp4 -d D:\captures   # D:\captures\clip.mp4
+```
+
+#### Quality presets
+
+Default preset is **medium**. `-f` / `-b` override preset values.
+
+| Preset | FPS | Bitrate |
+|--------|-----|---------|
+| `low` | 24 | 2 Mbps |
+| `medium` | 30 | 5 Mbps |
+| `high` | 45 | 7 Mbps |
+| `ultra` | 60 | 8 Mbps |
+| `extreme` | 60 | 12 Mbps |
+
+```powershell
+wrec r -t "Notepad" --preset high
+wrec r -t "Notepad" --preset ultra -f 30   # 30 fps, 8 Mbps bitrate
+```
+
+#### Record options
+
+| Short | Long | Default | Description |
+|-------|------|---------|-------------|
+| `-w` | `--hwnd` | — | Target window handle |
+| `-p` | `--pid` | — | Target process ID |
+| `-t` | `--title` | — | Partial window title match |
+| `-o` | `--out` | auto | Output MP4 path |
+| `-d` | `--output-dir` | cwd | Folder for `-o` or auto-named file |
+| — | `--preset` | medium | `low` … `extreme` |
+| `-f` | `--fps` | preset | Frame rate (overrides preset) |
+| `-b` | `--bitrate` | preset | Bitrate in bps (overrides preset) |
+| `-c` | `--cursor` | on | Cursor overlay (`on` / `off`) |
+| `-k` | `--hotkeys` | on | Global hotkeys (`on` / `off`) |
+| `-P` | `--start-paused` | off | Arm capture; Ctrl+Alt+S to start writing |
+| `-s` | `--speed` | 1 | Playback speed (`0.5`, `2x`, …) |
+| `-v` | `--verbose` | off | Verbose logging |
+| `-j` | `--json` | off | JSON events on stderr |
+| `-a` | `--audio` | — | Not implemented (`none` only) |
+
+### Hotkeys (when `--hotkeys on`)
+
+| Key | Action |
+|-----|--------|
+| Ctrl+Alt+S | Stop and finalize (or **start** if `--start-paused`) |
+| Ctrl+Alt+P | Pause / resume |
+| Ctrl+Alt+Q | Quit and finalize |
+
+### Examples
+
+```powershell
+wrec list
+wrec r -t "Notepad" -o test.mp4 -f 30
+wrec r -t "Notepad" -o slow.mp4 -s 0.5
+wrec r -t "Notepad" -o fast.mp4 -s 2x
+wrec r -t "Notepad" --start-paused -o demo.mp4
+wrec r -w 0x1050E -o demo.mp4 --cursor on -v
+```
 
 ## Build
 
-Requires **Visual Studio 2022 or later** (or Build Tools) with **Desktop development with C++** and Windows 10 SDK (18362+).
-
-### Recommended — Ninja (same as CI)
-
-Install [Ninja](https://ninja-build.org/) once:
+Install [Ninja](https://ninja-build.org/) once (optional, matches CI):
 
 ```powershell
 winget install Ninja-build.Ninja
 ```
 
-Then build (loads MSVC automatically via `VsDevCmd`; no Developer shell needed):
-
 ```powershell
-.\build.ps1
-# → build\wrec.exe
-
-.\build.ps1 -Clean              # clean rebuild
-.\build.ps1 -Generator VisualStudio   # use VS solution instead → build-vs\Release\wrec.exe
-```
-
-Manual Ninja build (from **Developer PowerShell for VS**):
-
-```powershell
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-```
-
-### Visual Studio generator
-
-```powershell
-.\build.ps1 -Generator VisualStudio
-# or manually:
-cmake -B build-vs -G "Visual Studio 17 2022" -A x64
-cmake --build build-vs --config Release
+.\build.ps1                              # → build\wrec.exe
+.\build.ps1 -Clean                       # clean rebuild
+.\build.ps1 -Generator VisualStudio      # → build-vs\Release\wrec.exe
 ```
 
 | Generator | Output |
@@ -55,152 +170,63 @@ cmake --build build-vs --config Release
 | Ninja (default) | `build\wrec.exe` |
 | Visual Studio | `build-vs\Release\wrec.exe` |
 
-### Install to PATH
+Manual Ninja build (Developer PowerShell for VS):
 
 ```powershell
-# After Ninja build:
-.\build\wrec.exe install
-
-# After VS generator build:
-.\build-vs\Release\wrec.exe install
-
-# Custom directory
-wrec install --dir D:\tools\bin
-
-# Remove from PATH and delete installed copy
-wrec uninstall
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
 
-Restart your terminal after install/uninstall.
+## Releases
 
-### Releases
-
-Prebuilt Windows x64 binaries are attached to GitHub Releases when a version tag is pushed:
+Push a tag to publish a Windows x64 zip on GitHub Releases:
 
 ```powershell
-git tag v1.0.0
-git push origin v1.0.0
+git tag v0.0.5
+git push origin v0.0.5
 ```
 
-Tag names must start with `v` (e.g. `v1.0.0`, `v0.2.1`). The release workflow builds `wrec.exe` and publishes `wrec-<version>-windows-x64.zip` (includes `open-terminal-here.bat` to open cmd in the extract folder).
-
-## Usage
-
-### List windows
-
-```powershell
-wrec list          # alias: l
-wrec l -a          # --all
-wrec l -j          # --json
-```
-
-### Record a window
-
-```powershell
-wrec record --hwnd 0x12345 --out capture.mp4   # aliases: rec, r
-wrec r -p 1234 -o capture.mp4
-wrec r -t "Notepad" -o capture.mp4 -f 30
-wrec r -t "Notepad"                              # auto: wrec-YYYYMMDD-HHMMSS.mp4
-wrec r -t "Notepad" -d D:\captures              # auto name in folder
-```
-
-Common options (short and long forms):
-
-| Short | Long | Default | Description |
-|-------|------|---------|-------------|
-| `-w` | `--hwnd` | — | Target window handle |
-| `-p` | `--pid` | — | Target process ID |
-| `-t` | `--title` | — | Partial window title match |
-| `-o` | `--out` | auto | Output MP4 path (`wrec-YYYYMMDD-HHMMSS.mp4` if omitted) |
-| `-d` | `--output-dir` | current dir | Output folder for `-o` or auto-named file |
-| — | `--preset` | medium | Quality: `low`, `medium`, `high`, `ultra`, `extreme` (24/2M, 30/5M, 45/7M, 60/8M, 60/12M) |
-| `-f` | `--fps` | preset | Output frame rate (overrides preset) |
-| `-b` | `--bitrate` | preset | H.264 bitrate in bps (overrides preset) |
-| `-c` | `--cursor` | on | Draw cursor overlay (`on\|off`) |
-| `-a` | `--audio` | — | Audio not implemented (`none` only) |
-| `-k` | `--hotkeys` | on | Global hotkeys (`on\|off`) |
-| `-P` | `--start-paused` | off | Arm capture; Ctrl+Alt+S to start |
-| `-s` | `--speed` | 1 | Playback speed (`0.9`, `2x`, etc.) |
-| `-v` | `--verbose` | off | Verbose logging |
-| `-j` | `--json` | off | JSON events on stderr |
-
-### Hotkeys
-
-| Key | Default behavior |
-|-----|------------------|
-| **Ctrl+Alt+S** | **Stop** and finalize (or **Start** if `--start-paused`) |
-| **Ctrl+Alt+P** | Pause / resume |
-| **Ctrl+Alt+Q** | Quit and finalize |
-
-### Examples
-
-```powershell
-# Find Notepad
-wrec list
-
-# Record Notepad at 30 fps
-wrec record --title "Notepad" --out test.mp4 --fps 30
-
-# Record with cursor, verbose logging
-wrec record --hwnd 0x1050E --out demo.mp4 --cursor on --verbose
-
-# Record at half speed (slow motion)
-wrec r -t "Notepad" -o slow.mp4 -f 30 -s 0.5
-
-# Record at 2x speed
-wrec r -t "Notepad" -o fast.mp4 -s 2x
-
-# Arm first, start with hotkey
-wrec record --title "Notepad" --out demo.mp4 --start-paused
-```
+Tags must start with `v`. The zip contains `wrec.exe`, README, LICENSE, and `scripts/open-terminal-here.bat`.
 
 ## How it works
 
-1. **Window pick** — `EnumWindows` + filters (`list`), or match by HWND/PID/title.
-2. **Capture** — WGC (`CreateForWindow` + D3D11 frame pool) while the target is visible; `PrintWindow` with `PW_RENDERFULLCONTENT` when another window covers it so animations keep updating in the recording. WGC cursor capture is disabled; cursor is drawn manually.
-3. **Cursor** — `GetCursorInfo` / `GetIconInfo`, CPU alpha-blend into the BGRA frame. Cursor is drawn when its screen position falls inside the target window bounds (default). Covered-window cursor is still shown because overlay uses global cursor position, not z-order.
-4. **Encode** — Media Foundation Sink Writer, H.264 MP4. Output resolution is fixed from the first frame; later resizes are letterboxed into that size.
-5. **Pause** — Frames are still captured but not written; timestamps follow wall clock (minus paused time), scaled by `--speed`.
+1. **Target** — `EnumWindows` with filters; match by HWND, PID, or title substring.
+2. **Capture** — WGC + D3D11 frame pool while the window is on top; `PrintWindow` (`PW_RENDERFULLCONTENT`) when occluded so background animation can still update.
+3. **Cursor** — CPU alpha-blend from `GetCursorInfo` when the cursor is inside the target bounds.
+4. **Encode** — Media Foundation H.264 sink writer. Output size is fixed from the first frame; later resizes are scaled/letterboxed.
+5. **Timing** — Wall-clock timestamps (minus paused time), scaled by `--speed`.
 
-## Known limitations
+## Limitations
 
-- **No audio** — `--audio none` only; code is structured for future `IAudioClient` integration.
-- **Minimized windows** — may produce zero-size frames; recording stops with a message.
-- **Apps that pause when hidden** — some programs stop animating when occluded or unfocused (Page Visibility, game pause-on-focus-loss). Capture can only record what the app renders.
-- **CPU encode path** — BGRA copied to MF in software (no GPU MF DXGI path yet).
-- **Fixed output size** — set at session start; resize scales/letterboxes into that buffer.
-- **Cursor outside target** — not drawn when outside the target window screen bounds (default `Hide` policy).
-- **Single window** — one capture target per process.
-- **Ambiguous `--title`** — errors if zero or multiple matches.
-- **H.264 dimensions** — width/height rounded down to even values.
-
-## Acceptance checklist
-
-1. `wrec list` shows common apps (Notepad, Chrome, VS Code).
-2. `wrec record --title "Notepad" --out test.mp4 --fps 30` creates a playable MP4.
-3. Covered target still records updating content (PrintWindow fallback when occluded).
-4. Cursor visible inside target bounds with `--cursor on`.
-5. Ctrl+Alt+P pause/resume without corrupting the file.
-6. Ctrl+Alt+Q exits and finalizes.
-7. Target window close exits gracefully.
-8. Unsupported OS prints a clear error.
-9. Resize during recording does not crash (letterbox into fixed size).
-10. Cursor over covered target area appears in output.
-11. Cursor outside target bounds is not drawn (default).
+- No audio
+- Minimized targets may fail (zero-size frames)
+- Some apps pause rendering when unfocused (games, Page Visibility API) — capture only sees what the app draws
+- Software encode path (CPU BGRA → MF)
+- Single window per session
+- `--title` must match exactly one window
+- H.264 requires even width/height (rounded down)
 
 ## Project layout
 
 ```
 src/
-  main.cpp           Entry, DPI, WinRT apartment
-  cli.cpp            Argument parsing
-  window_list.cpp    EnumWindows + target resolution
-  capture_wgc.cpp    Windows Graphics Capture
-  d3d_device.cpp     D3D11 staging + scale/copy
-  cursor_overlay.cpp Cursor alpha-blend
-  mf_encoder.cpp     MF Sink Writer H.264
-  hotkeys.cpp        Ctrl+Alt+S/P/Q
-  recorder.cpp       Session orchestration
-  logging.cpp        Logging + HRESULT helpers
-  result.h           Result<T> / Status
+  main.cpp              Entry, DPI, WinRT apartment
+  cli.cpp               Argument parsing
+  gui.cpp               Win32 GUI
+  record_options.cpp    Presets, output path resolution
+  window_list.cpp       EnumWindows, target resolution
+  capture_wgc.cpp       Windows Graphics Capture
+  capture_printwindow.cpp   Occluded-window fallback
+  d3d_device.cpp        D3D11 staging, scale/copy
+  cursor_overlay.cpp    Cursor alpha-blend
+  mf_encoder.cpp        H.264 MP4 encoder
+  hotkeys.cpp           Ctrl+Alt+S/P/Q
+  recorder.cpp          Session orchestration
+  path_install.cpp      install / uninstall
+  logging.cpp           Logging, UTF-8 console
+  result.h              Result<T>, Status
 ```
+
+## License
+
+MIT — Copyright (c) 2026 Mew. See [LICENSE](LICENSE).

@@ -9,11 +9,12 @@
 #include "mf_encoder.h"
 #include "window_list.h"
 
-
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+
 
 namespace {
 
@@ -41,7 +42,8 @@ void waitUntil(Clock::time_point target) {
 
 } // namespace
 
-Status runRecorder(const RecordOptions &options) {
+Status runRecorder(const RecordOptions &options,
+                   std::atomic<bool> *stopRequested) {
   const auto support = checkCaptureSupport();
   if (!support.isOk()) {
     return Status::fail(support.error());
@@ -137,6 +139,11 @@ Status runRecorder(const RecordOptions &options) {
 
   bool running = true;
   while (running) {
+    if (stopRequested != nullptr && stopRequested->load()) {
+      running = false;
+      break;
+    }
+
     if (options.hotkeys) {
       switch (hotkeys.pollAction()) {
       case HotkeyAction::StopOrStart:

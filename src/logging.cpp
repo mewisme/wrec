@@ -2,14 +2,17 @@
 
 #include <Windows.h>
 #include <comdef.h>
+#include <functional>
 #include <iostream>
 #include <sstream>
+
 
 std::string wideToUtf8(const std::wstring &wide);
 
 namespace {
 bool g_verbose = false;
 bool g_json = false;
+LogGuiSink g_guiSink;
 
 void writeConsoleStream(DWORD stdHandle, FILE *file, const std::wstring &text) {
   HANDLE handle = GetStdHandle(stdHandle);
@@ -43,10 +46,14 @@ void writeStderr(const std::wstring &text) {
 void logSetVerbose(bool verbose) { g_verbose = verbose; }
 void logSetJson(bool json) { g_json = json; }
 bool logIsJson() { return g_json; }
+void logSetGuiSink(LogGuiSink sink) { g_guiSink = std::move(sink); }
 
 void logMessage(LogLevel level, const std::string &message) {
   if (level == LogLevel::Verbose && !g_verbose) {
     return;
+  }
+  if (g_guiSink && level != LogLevel::Verbose) {
+    g_guiSink(level, message);
   }
   if (g_json) {
     return;

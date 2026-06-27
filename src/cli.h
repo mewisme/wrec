@@ -35,7 +35,14 @@ struct InstallOptions {
 };
 
 struct ParsedCommand {
-  enum class Kind { Help, List, Record, Install, Uninstall } kind = Kind::Help;
+  enum class Kind {
+    Help,
+    List,
+    Record,
+    Install,
+    Uninstall,
+    Gui
+  } kind = Kind::Help;
   ListOptions list{};
   RecordOptions record{};
   InstallOptions install{};
