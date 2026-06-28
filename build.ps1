@@ -7,13 +7,14 @@
   .\build.ps1
   .\build.ps1 -Generator VisualStudio
   .\build.ps1 -Clean
+  .\build.ps1 -Version 1.2.3
 #>
 param(
   [ValidateSet('Ninja', 'VisualStudio')]
   [string]$Generator = 'Ninja',
   [ValidateSet('Debug', 'Release')]
   [string]$Config = 'Release',
-  [string]$Version,
+  [string]$Version = '',
   [switch]$Clean
 )
 
@@ -85,8 +86,8 @@ else {
   }
   # Use latest installed VS generator (17 2022, 18 2026, ...)
   $vswhere = Find-VsWhere
-  $vsVersion = & $vswhere -latest -property catalog_buildVersion 2>$null
-  $genYear = if ($vsVersion -match '^(\d+)') { [int]$Matches[1] } else { 2022 }
+  $version = & $vswhere -latest -property catalog_buildVersion 2>$null
+  $genYear = if ($version -match '^(\d+)') { [int]$Matches[1] } else { 2022 }
   $vsGen = "Visual Studio 17 2022"
   if ($genYear -ge 2026) { $vsGen = 'Visual Studio 18 2026' }
   elseif ($genYear -ge 2025) { $vsGen = 'Visual Studio 17 2022' }
