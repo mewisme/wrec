@@ -13,6 +13,7 @@ param(
   [string]$Generator = 'Ninja',
   [ValidateSet('Debug', 'Release')]
   [string]$Config = 'Release',
+  [string]$Version,
   [switch]$Clean
 )
 
@@ -64,6 +65,7 @@ Or use: .\build.ps1 -Generator VisualStudio
 
 $cmake = Find-CMake
 $vsDevCmd = Join-Path (Find-VsInstallPath) 'Common7\Tools\VsDevCmd.bat'
+$versionArg = if ($Version) { " -DWREC_VERSION=$Version" } else { ' -UWREC_VERSION' }
 
 if ($Generator -eq 'Ninja') {
   $buildDir = Join-Path $Root 'build'
@@ -72,7 +74,7 @@ if ($Generator -eq 'Ninja') {
   if ($Clean -and (Test-Path $buildDir)) {
     Remove-Item -Recurse -Force $buildDir
   }
-  $configure = "`"$cmake`" -B `"$buildDir`" -G Ninja -DCMAKE_BUILD_TYPE=$Config -DCMAKE_MAKE_PROGRAM=`"$ninja`""
+  $configure = "`"$cmake`" -B `"$buildDir`" -G Ninja -DCMAKE_BUILD_TYPE=$Config -DCMAKE_MAKE_PROGRAM=`"$ninja`"$versionArg"
   $build = "`"$cmake`" --build `"$buildDir`" --parallel"
 }
 else {
@@ -83,12 +85,12 @@ else {
   }
   # Use latest installed VS generator (17 2022, 18 2026, ...)
   $vswhere = Find-VsWhere
-  $version = & $vswhere -latest -property catalog_buildVersion 2>$null
-  $genYear = if ($version -match '^(\d+)') { [int]$Matches[1] } else { 2022 }
+  $vsVersion = & $vswhere -latest -property catalog_buildVersion 2>$null
+  $genYear = if ($vsVersion -match '^(\d+)') { [int]$Matches[1] } else { 2022 }
   $vsGen = "Visual Studio 17 2022"
   if ($genYear -ge 2026) { $vsGen = 'Visual Studio 18 2026' }
   elseif ($genYear -ge 2025) { $vsGen = 'Visual Studio 17 2022' }
-  $configure = "`"$cmake`" -B `"$buildDir`" -G `"$vsGen`" -A x64"
+  $configure = "`"$cmake`" -B `"$buildDir`" -G `"$vsGen`" -A x64$versionArg"
   $build = "`"$cmake`" --build `"$buildDir`" --config $Config --parallel"
 }
 

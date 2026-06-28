@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(wrec VERSION 1.0.0 LANGUAGES CXX)
 
+if(NOT DEFINED WREC_VERSION)
+    set(WREC_VERSION "${PROJECT_VERSION}")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -75,4 +79,5 @@ target_compile_definitions(wrec PRIVATE
     NOMINMAX
     UNICODE
     _UNICODE
+    "WREC_VERSION=\"${WREC_VERSION}\""
 )

@@ -14,6 +14,61 @@ wrec captures **top-level windows** (not the full desktop), composes them into o
 - **Global hotkeys** — stop, pause, and quit while recording
 - **PATH install** — `wrec install` copies to `%USERPROFILE%\.local\bin`
 
+## Installation
+
+Windows x64 only.
+
+### Winget
+
+```powershell
+winget install Mew.Wrec
+```
+
+Package identifier: `Mew.Wrec`
+
+### Scoop
+
+Add this repo as a bucket (one-time), then install:
+
+```powershell
+scoop bucket add mew https://github.com/mewisme/wrec
+scoop install wrec
+```
+
+Updates: `scoop update wrec`
+
+### PowerShell
+
+Latest release:
+
+```powershell
+irm https://raw.githubusercontent.com/mewisme/wrec/main/install.ps1 | iex
+```
+
+Specific version:
+
+```powershell
+& ([ScriptBlock]::Create((irm https://raw.githubusercontent.com/mewisme/wrec/main/install.ps1))) -Version v1.2.3
+```
+
+Or, with an environment variable:
+
+```powershell
+$env:WREC_VERSION = 'v1.2.3'; irm https://raw.githubusercontent.com/mewisme/wrec/main/install.ps1 | iex
+```
+
+The PowerShell installer downloads from [GitHub Releases](https://github.com/mewisme/wrec/releases).
+
+### Manual
+
+1. Download the latest [release ZIP](https://github.com/mewisme/wrec/releases) (`wrec-v<version>-windows-amd64.zip`).
+2. Extract `wrec.exe`.
+3. Install:
+
+```powershell
+.\wrec.exe install
+```
+
 ## Quick start
 
 **Release** ([download zip](https://github.com/mewisme/wrec/releases)) — Windows x64:

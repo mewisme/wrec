@@ -43,6 +43,7 @@ struct InstallOptions {
 struct ParsedCommand {
   enum class Kind {
     Help,
+    Version,
     List,
     Record,
     Install,
@@ -57,3 +58,4 @@ struct ParsedCommand {
 Result<ParsedCommand> parseCommandLine(int argc, wchar_t *argv[]);
 int runCommand(const ParsedCommand &command);
 void printUsage();
+const char *wrecVersion();

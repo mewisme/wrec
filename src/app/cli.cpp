@@ -292,15 +292,25 @@ Result<ParsedCommand> parseInstallArgs(ParsedCommand cmd, int argc,
 
 } // namespace
 
+const char *wrecVersion() {
+#ifndef WREC_VERSION
+  return "dev";
+#else
+  return WREC_VERSION;
+#endif
+}
+
 void printUsage() {
-  std::cout << "wrec - Windows CLI screen recorder\n\n"
+  std::cout << "wrec " << wrecVersion()
+            << " - Windows CLI screen recorder\n\n"
                "Usage:\n"
                "  wrec list|l [-a] [-j] [-v]\n"
                "  wrec record|rec|r (-w <HWND> | -p <PID> | -t <text> | "
                "-S <spec>) [-o <file.mp4>] [options]\n"
                "  wrec gui\n"
                "  wrec install [-d <dir>] [-v]\n"
-               "  wrec uninstall [-d <dir>] [-v]\n\n"
+               "  wrec uninstall [-d <dir>] [-v]\n"
+               "  wrec --version\n\n"
                "List options:\n"
                "  -a, --all              Include tool/invisible/shell windows\n"
                "  -j, --json             JSON output\n"
@@ -386,6 +396,11 @@ Result<ParsedCommand> parseCommandLine(int argc, wchar_t *argv[]) {
     return Result<ParsedCommand>::ok(std::move(cmd));
   }
 
+  if (sub == L"--version" || sub == L"-V") {
+    cmd.kind = ParsedCommand::Kind::Version;
+    return Result<ParsedCommand>::ok(std::move(cmd));
+  }
+
   return Result<ParsedCommand>::fail("Unknown command: " + wideToUtf8(sub));
 }
 
@@ -415,6 +430,9 @@ int runCommand(const ParsedCommand &command) {
   switch (command.kind) {
   case ParsedCommand::Kind::Help:
     printUsage();
+    return 0;
+  case ParsedCommand::Kind::Version:
+    std::cout << "wrec " << wrecVersion() << '\n';
     return 0;
   case ParsedCommand::Kind::List: {
     logSetVerbose(command.list.verbose);

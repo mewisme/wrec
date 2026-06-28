@@ -25,26 +25,41 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWREC_VERSION=${{ steps.version.outputs.version }}
 
       - name: Build
         run: cmake --build build --parallel
 
-      - name: Package
+      - name: Package release assets
         shell: pwsh
         run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $dir = "dist/wrec-$version-windows-x64"
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Copy-Item build/wrec.exe $dir/
-          Copy-Item README.md $dir/
-          Copy-Item LICENSE $dir/
-          Copy-Item scripts/open-terminal-here.bat $dir/
-          Compress-Archive -Path $dir/* -DestinationPath "dist/wrec-$version-windows-x64.zip"
+          ./scripts/release-packaging.ps1 `
+            -Version "${{ steps.version.outputs.version }}" `
+            -ExePath "build/wrec.exe" `
+            -DistDir "dist"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: v${{ steps.version.outputs.version }}
-          files: dist/wrec-${{ steps.version.outputs.version }}-windows-x64.zip
+          files: |
+            dist/wrec-v${{ steps.version.outputs.version }}-windows-amd64.zip
+            dist/SHA256SUMS
+            dist/wrec.json
+            dist/winget/Mew.Wrec/Mew.Wrec.yaml
+            dist/winget/Mew.Wrec/Mew.Wrec.installer.yaml
+            dist/winget/Mew.Wrec/Mew.Wrec.locale.en-US.yaml
           generate_release_notes: true
+
+      - name: Update Scoop bucket manifest on main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp bucket/wrec.json /tmp/wrec-bucket.json
+          git fetch origin main
+          git checkout main
+          cp /tmp/wrec-bucket.json bucket/wrec.json
+          git add bucket/wrec.json
+          git diff --staged --quiet || git commit -m "chore(scoop): update bucket manifest for v${{ steps.version.outputs.version }}"
+          git push origin main
