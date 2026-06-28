@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstring>
 #include <cwchar>
 #include <iostream>
 #include <sstream>
@@ -321,6 +322,27 @@ const char *wrecVersion() {
 #endif
 }
 
+void printVersion() {
+  std::cout << R"( __          _______  ______ _____ 
+ \ \        / /  __ \|  ____/ ____|
+  \ \  /\  / /| |__) | |__ | |     
+   \ \/  \/ / |  _  /|  __|| |     
+    \  /\  /  | | \ \| |___| |____ 
+     \/  \/   |_|  \_\______\_____|
+
+)";
+  const char *ver = wrecVersion();
+  if (std::strcmp(ver, "dev") == 0) {
+    std::cout << "wrec " << ver << '\n';
+  } else {
+    std::cout << "wrec v" << ver << '\n';
+  }
+  std::cout << "\xC2\xA9 2026 Mew\n";
+  std::cout << "Licensed under the MIT License\n";
+  std::cout << "Installed via " << installSourceLabel(detectInstallSource())
+            << '\n';
+}
+
 void printUsage() {
   std::cout
       << "wrec " << wrecVersion()
@@ -458,8 +480,7 @@ int runCommand(const ParsedCommand &command) {
     printUsage();
     return 0;
   case ParsedCommand::Kind::Version:
-    std::cout << "wrec " << wrecVersion() << '\n';
-    std::cout << "installed via: " << detectInstallSource() << '\n';
+    printVersion();
     return 0;
   case ParsedCommand::Kind::List: {
     logSetVerbose(command.list.verbose);

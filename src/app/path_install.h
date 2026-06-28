@@ -10,3 +10,4 @@ Status installToPath(const InstallOptions &options);
 Status uninstallFromPath(const InstallOptions &options);
 std::wstring defaultInstallDir();
 const char *detectInstallSource();
+const char *installSourceLabel(const char *source);

@@ -165,6 +165,22 @@ const char *detectInstallSource() {
   return "portable";
 }
 
+const char *installSourceLabel(const char *source) {
+  if (std::strcmp(source, "winget") == 0) {
+    return "Winget";
+  }
+  if (std::strcmp(source, "scoop") == 0) {
+    return "Scoop";
+  }
+  if (std::strcmp(source, "install") == 0) {
+    return "manual PATH install";
+  }
+  if (std::strcmp(source, "portable") == 0) {
+    return "portable ZIP";
+  }
+  return "unknown";
+}
+
 Status rejectIfPackageManaged(const char *command) {
   const char *src = detectInstallSource();
   if (std::strcmp(src, "winget") == 0 || std::strcmp(src, "scoop") == 0) {

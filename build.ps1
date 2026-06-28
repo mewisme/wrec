@@ -101,6 +101,4 @@ Write-Host "Build dir: $buildDir" -ForegroundColor Cyan
 cmd /c "`"$vsDevCmd`" -arch=amd64 -host_arch=amd64 && cd /d `"$Root`" && $configure && $build"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "Built: $exePath" -ForegroundColor Green        Write-Host "Built: $exePath" -ForegroundColreenor G
-
-Write-Host "Built: $exePath" -ForegroundColor Greenreen
+Write-Host "Built: $exePath" -ForegroundColor Green

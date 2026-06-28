@@ -14,9 +14,11 @@ wrec help
 ### Version
 
 ```powershell
-wrec -V                # version + install source (winget, scoop, install, portable)
+wrec -V
 wrec --version
 ```
+
+Shows the ASCII banner, version, license, and install source (`Winget`, `Scoop`, `manual PATH install`, `portable ZIP`).
 
 `wrec install` and `wrec uninstall` are for manual ZIP installs only (not winget/scoop).
 

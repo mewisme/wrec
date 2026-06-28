@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 project(wrec VERSION 1.0.0 LANGUAGES CXX)
 
-if(NOT DEFINED WREC_VERSION)
-    set(WREC_VERSION "${PROJECT_VERSION}")
+# ponytail: semver must be STRING — unquoted -D0.1.8 is parsed as 0 by CMake/MSVC
+set(WREC_VERSION "${PROJECT_VERSION}" CACHE STRING "Version string embedded in wrec.exe")
+if(WREC_VERSION MATCHES "^[0-9]+$")
+    message(FATAL_ERROR
+        "WREC_VERSION looks truncated (${WREC_VERSION}). "
+        "Use -DWREC_VERSION:STRING=x.y.z or quote: -D\"WREC_VERSION=x.y.z\"")
 endif()
 
 set(CMAKE_CXX_STANDARD 20)

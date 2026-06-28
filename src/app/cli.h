@@ -62,4 +62,5 @@ struct ParsedCommand {
 Result<ParsedCommand> parseCommandLine(int argc, wchar_t *argv[]);
 int runCommand(const ParsedCommand &command);
 void printUsage();
+void printVersion();
 const char *wrecVersion();

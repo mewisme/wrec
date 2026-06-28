@@ -25,7 +25,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWREC_VERSION=${{ steps.version.outputs.version }}
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DWREC_VERSION:STRING=${{ steps.version.outputs.version }}"
 
       - name: Build
         run: cmake --build build --parallel

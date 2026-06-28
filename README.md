@@ -75,7 +75,7 @@ Check version and how it was installed:
 wrec -V
 ```
 
-`installed via` is detected from the running executable path: `winget`, `scoop`, `install` (PowerShell script or `wrec install` → `%USERPROFILE%\.local\bin`), or `portable` (ZIP extract, build output, etc.). `wrec install` and `wrec uninstall` work only for manual installs; winget and scoop manage their own copies.
+`Installed via` is detected from the running executable path (e.g. `Scoop`, `Winget`, `manual PATH install`, `portable ZIP`).
 
 ## Quick start
 
