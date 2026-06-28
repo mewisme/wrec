@@ -6,7 +6,7 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/mewisme/wrec/releases/download/v0.1.6/wrec-v0.1.6-windows-amd64.zip",
-      "hash": "D01B8A38043EC445FE98D8D351643B60D8BE8D6C0945829A0D395D2105E2B9BD"
+      "hash": "2E2C4CA275C14201000D024CB4C1F92A62BD4475ABB0F4DB1EF91BE220259D1A"
     }
   },
   "bin": "wrec.exe",
