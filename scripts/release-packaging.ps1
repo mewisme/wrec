@@ -34,6 +34,7 @@ $releaseUrl = "https://github.com/mewisme/wrec/releases/download/v$Version/$zipN
 # Scoop bucket manifest (bucket/wrec.json + release asset copy)
 $scoopTemplate = Get-Content -LiteralPath (Join-Path $RepoRoot 'bucket/wrec.json') -Raw
 $scoop = $scoopTemplate -replace '"version": "[^"]+"', "`"version`": `"$Version`""
+$scoop = $scoop -replace 'https://github.com/mewisme/wrec/releases/download/v[^/]+/wrec-v[\d.]+-windows-amd64\.zip', $releaseUrl
 $scoop = $scoop -replace 'https://github.com/mewisme/wrec/releases/download/v[^/]+/', "https://github.com/mewisme/wrec/releases/download/v$Version/"
 $scoop = $scoop -replace '"hash": "[^"]+"', "`"hash`": `"$hash`""
 Set-Content -LiteralPath (Join-Path $RepoRoot 'bucket/wrec.json') -Value $scoop -NoNewline
