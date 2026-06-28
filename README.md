@@ -35,7 +35,12 @@ scoop bucket add mew https://github.com/mewisme/wrec
 scoop install wrec
 ```
 
-Updates: `scoop update wrec`
+Updates: 
+
+```powershell
+scoop update
+scoop update wrec
+```
 
 ### PowerShell
 
