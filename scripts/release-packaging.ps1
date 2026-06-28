@@ -40,17 +40,26 @@ $scoop = $scoop -replace '"hash": "[^"]+"', "`"hash`": `"$hash`""
 Set-Content -LiteralPath (Join-Path $RepoRoot 'bucket/wrec.json') -Value $scoop -NoNewline
 Set-Content -LiteralPath (Join-Path $DistDir 'wrec.json') -Value $scoop -NoNewline
 
-# Winget manifests (from packaging/winget templates)
-$wingetTemplateDir = Join-Path $RepoRoot 'packaging/winget/Mew.Wrec'
-$wingetDir = Join-Path $DistDir 'winget/Mew.Wrec'
-New-Item -ItemType Directory -Force -Path $wingetDir | Out-Null
-
-Get-ChildItem -LiteralPath $wingetTemplateDir -Filter '*.yaml' | ForEach-Object {
-  $content = Get-Content -LiteralPath $_.FullName -Raw
-  $content = $content -replace 'PackageVersion: [^\r\n]+', "PackageVersion: $Version"
-  $content = $content -replace 'InstallerUrl: [^\r\n]+', "InstallerUrl: $releaseUrl"
-  $content = $content -replace 'InstallerSha256: [^\r\n]+', "InstallerSha256: $hash"
-  Set-Content -LiteralPath (Join-Path $wingetDir $_.Name) -Value $content -NoNewline
+# Winget manifests (wingetcreate layout: packaging/winget/manifests/m/Mew/Wrec/<version>/)
+$wingetRel = "winget/manifests/m/Mew/Wrec/$Version"
+$wingetTemplateDir = Join-Path $RepoRoot "packaging/$wingetRel"
+if (-not (Test-Path -LiteralPath $wingetTemplateDir)) {
+  throw "Winget manifest templates not found: packaging/$wingetRel (run wingetcreate for v$Version first)"
 }
+
+function Write-WingetManifests {
+  param([string]$DestDir)
+  New-Item -ItemType Directory -Force -Path $DestDir | Out-Null
+  Get-ChildItem -LiteralPath $wingetTemplateDir -Filter '*.yaml' | ForEach-Object {
+    $content = Get-Content -LiteralPath $_.FullName -Raw
+    $content = $content -replace 'PackageVersion: [^\r\n]+', "PackageVersion: $Version"
+    $content = $content -replace 'InstallerUrl: [^\r\n]+', "InstallerUrl: $releaseUrl"
+    $content = $content -replace 'InstallerSha256: [^\r\n]+', "InstallerSha256: $hash"
+    Set-Content -LiteralPath (Join-Path $DestDir $_.Name) -Value $content -NoNewline
+  }
+}
+
+Write-WingetManifests -DestDir (Join-Path $RepoRoot "packaging/$wingetRel")
+Write-WingetManifests -DestDir (Join-Path $DistDir $wingetRel)
 
 Write-Host "Packaged $zipName (SHA256: $hash)"

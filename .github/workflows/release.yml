@@ -46,9 +46,9 @@ jobs:
             dist/wrec-v${{ steps.version.outputs.version }}-windows-amd64.zip
             dist/SHA256SUMS
             dist/wrec.json
-            dist/winget/Mew.Wrec/Mew.Wrec.yaml
-            dist/winget/Mew.Wrec/Mew.Wrec.installer.yaml
-            dist/winget/Mew.Wrec/Mew.Wrec.locale.en-US.yaml
+            dist/winget/manifests/m/Mew/Wrec/${{ steps.version.outputs.version }}/Mew.Wrec.yaml
+            dist/winget/manifests/m/Mew/Wrec/${{ steps.version.outputs.version }}/Mew.Wrec.installer.yaml
+            dist/winget/manifests/m/Mew/Wrec/${{ steps.version.outputs.version }}/Mew.Wrec.locale.en-US.yaml
           generate_release_notes: true
 
       - name: Update Scoop bucket manifest on main
