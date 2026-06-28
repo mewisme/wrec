@@ -6,6 +6,7 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <vector>
 
@@ -136,7 +137,50 @@ std::wstring defaultInstallDir() {
   return normalizeDir(home + L"\\.local\\bin");
 }
 
+const char *detectInstallSource() {
+  const auto pathResult = currentExePath();
+  if (!pathResult.isOk()) {
+    return "unknown";
+  }
+
+  std::wstring path = pathResult.value();
+  std::transform(path.begin(), path.end(), path.begin(),
+                 [](wchar_t ch) { return static_cast<wchar_t>(towlower(ch)); });
+
+  // ponytail: path heuristics only; upgrade path is a sidecar marker at install
+  // time
+  if (path.find(L"\\scoop\\apps\\wrec\\") != std::wstring::npos ||
+      path.find(L"\\scoop\\shims\\wrec.exe") != std::wstring::npos) {
+    return "scoop";
+  }
+  if (path.find(L"\\microsoft\\winget\\") != std::wstring::npos) {
+    return "winget";
+  }
+
+  const std::wstring destExe = defaultInstallDir() + L"\\wrec.exe";
+  if (equalsPathIgnoreCase(pathResult.value(), destExe)) {
+    return "install";
+  }
+
+  return "portable";
+}
+
+Status rejectIfPackageManaged(const char *command) {
+  const char *src = detectInstallSource();
+  if (std::strcmp(src, "winget") == 0 || std::strcmp(src, "scoop") == 0) {
+    return Status::fail(std::string("wrec ") + command +
+                        " is for manual ZIP installs only; this copy was "
+                        "installed via " +
+                        src);
+  }
+  return Status::ok();
+}
+
 Status installToPath(const InstallOptions &options) {
+  if (auto st = rejectIfPackageManaged("install"); !st.isOk()) {
+    return st;
+  }
+
   const std::wstring dir =
       normalizeDir(options.dir.empty() ? defaultInstallDir() : options.dir);
   const std::wstring destExe = dir + L"\\wrec.exe";
@@ -178,6 +222,10 @@ Status installToPath(const InstallOptions &options) {
 }
 
 Status uninstallFromPath(const InstallOptions &options) {
+  if (auto st = rejectIfPackageManaged("uninstall"); !st.isOk()) {
+    return st;
+  }
+
   const std::wstring dir =
       normalizeDir(options.dir.empty() ? defaultInstallDir() : options.dir);
   const std::wstring destExe = dir + L"\\wrec.exe";

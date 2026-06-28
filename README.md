@@ -69,6 +69,14 @@ The PowerShell installer downloads from [GitHub Releases](https://github.com/mew
 .\wrec.exe install
 ```
 
+Check version and how it was installed:
+
+```powershell
+wrec -V
+```
+
+`installed via` is detected from the running executable path: `winget`, `scoop`, `install` (PowerShell script or `wrec install` → `%USERPROFILE%\.local\bin`), or `portable` (ZIP extract, build output, etc.). `wrec install` and `wrec uninstall` work only for manual installs; winget and scoop manage their own copies.
+
 ## Quick start
 
 **Release** ([download zip](https://github.com/mewisme/wrec/releases)) — Windows x64:

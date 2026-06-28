@@ -7,8 +7,18 @@ wrec list|l [options]
 wrec record|rec|r (-w <HWND> | -p <PID> | -t <title> | -S <spec>) [options]
 wrec gui
 wrec install|uninstall [options]
+wrec -V, --version
 wrec help
 ```
+
+### Version
+
+```powershell
+wrec -V                # version + install source (winget, scoop, install, portable)
+wrec --version
+```
+
+`wrec install` and `wrec uninstall` are for manual ZIP installs only (not winget/scoop).
 
 ---
 

@@ -9,3 +9,4 @@ struct InstallOptions;
 Status installToPath(const InstallOptions &options);
 Status uninstallFromPath(const InstallOptions &options);
 std::wstring defaultInstallDir();
+const char *detectInstallSource();
