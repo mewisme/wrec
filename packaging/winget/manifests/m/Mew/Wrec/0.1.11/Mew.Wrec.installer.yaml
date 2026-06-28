@@ -1,0 +1,17 @@
+# Created using wingetcreate 1.12.8.0
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+PackageIdentifier: Mew.Wrec
+PackageVersion: 0.1.11
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: wrec.exe
+  PortableCommandAlias: wrec
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/mewisme/wrec/releases/download/v0.1.11/wrec-v0.1.11-windows-amd64.zip
+  InstallerSha256: 36B429416E0530A377E75075028A04CE7EEAFBD71B59590593D6E7361419FCFB
+ManifestType: installer
+ManifestVersion: 1.12.0
+ReleaseDate: 2026-06-28

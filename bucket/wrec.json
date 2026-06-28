@@ -1,12 +1,12 @@
 {
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Record one or more Windows windows into a single MP4",
   "homepage": "https://github.com/mewisme/wrec",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/mewisme/wrec/releases/download/v0.1.10/wrec-v0.1.10-windows-amd64.zip",
-      "hash": "F4BF040E524D407970044383EB094E920DF04F8DCFAB2524BDDB2004BF1A0A49"
+      "url": "https://github.com/mewisme/wrec/releases/download/v0.1.11/wrec-v0.1.11-windows-amd64.zip",
+      "hash": "36B429416E0530A377E75075028A04CE7EEAFBD71B59590593D6E7361419FCFB"
     }
   },
   "bin": "wrec.exe",
@@ -16,7 +16,7 @@
   "autoupdate": {
     "architecture": {
       "64bit": {
-        "url": "https://github.com/mewisme/wrec/releases/download/v0.1.10/wrec-v$version-windows-amd64.zip"
+        "url": "https://github.com/mewisme/wrec/releases/download/v0.1.11/wrec-v$version-windows-amd64.zip"
       }
     }
   }
