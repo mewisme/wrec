@@ -13,6 +13,84 @@ param(
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 
+function Update-ManifestVersion {
+  param(
+    [string]$Content,
+    [string]$OldVersion,
+    [string]$NewVersion
+  )
+  $escapedOld = [regex]::Escape($OldVersion)
+  $content = $Content -replace "PackageVersion: $escapedOld", "PackageVersion: $NewVersion"
+  $content = $content -replace "v$escapedOld", "v$NewVersion"
+  $content = $content -replace "wrec-v$escapedOld", "wrec-v$NewVersion"
+  $placeholderHash = 'InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000'
+  $content = $content -replace 'InstallerSha256: [^\r\n]+', $placeholderHash
+  $content = $content -replace 'ReleaseDate: [^\r\n]+', "ReleaseDate: $(Get-Date -Format 'yyyy-MM-dd')"
+  return $content
+}
+
+function Get-WingetVersionEntries {
+  param([string]$BaseDir)
+  if (-not (Test-Path -LiteralPath $BaseDir)) {
+    return @()
+  }
+  Get-ChildItem -LiteralPath $BaseDir -Directory | ForEach-Object {
+    $parsed = $null
+    if ([version]::TryParse($_.Name, [ref]$parsed)) {
+      [pscustomobject]@{ Path = $_.FullName; Name = $_.Name; Version = $parsed }
+    }
+  }
+}
+
+function Initialize-WingetTemplateDir {
+  param(
+    [string]$BaseDir,
+    [string]$TargetVersion
+  )
+  $dest = Join-Path $BaseDir $TargetVersion
+  if (Test-Path -LiteralPath $dest) {
+    return $dest
+  }
+
+  $target = [version]$TargetVersion
+  $previous = Get-WingetVersionEntries -BaseDir $BaseDir |
+    Where-Object { $_.Version -lt $target } |
+    Sort-Object -Property Version -Descending |
+    Select-Object -First 1
+
+  if (-not $previous) {
+    throw "No previous winget manifests under packaging/winget/manifests/m/Mew/Wrec/ to copy for v$TargetVersion"
+  }
+
+  New-Item -ItemType Directory -Force -Path $dest | Out-Null
+  Get-ChildItem -LiteralPath $previous.Path -Filter '*.yaml' | ForEach-Object {
+    $content = Get-Content -LiteralPath $_.FullName -Raw
+    $content = Update-ManifestVersion -Content $content -OldVersion $previous.Name -NewVersion $TargetVersion
+    Set-Content -LiteralPath (Join-Path $dest $_.Name) -Value $content -NoNewline
+  }
+
+  Write-Host "Created winget templates for v$TargetVersion from v$($previous.Name)"
+  return $dest
+}
+
+function Write-WingetManifests {
+  param(
+    [string]$TemplateDir,
+    [string]$DestDir,
+    [string]$PackageVersion,
+    [string]$InstallerUrl,
+    [string]$InstallerSha256
+  )
+  New-Item -ItemType Directory -Force -Path $DestDir | Out-Null
+  Get-ChildItem -LiteralPath $TemplateDir -Filter '*.yaml' | ForEach-Object {
+    $content = Get-Content -LiteralPath $_.FullName -Raw
+    $content = $content -replace 'PackageVersion: [^\r\n]+', "PackageVersion: $PackageVersion"
+    $content = $content -replace 'InstallerUrl: [^\r\n]+', "InstallerUrl: $InstallerUrl"
+    $content = $content -replace 'InstallerSha256: [^\r\n]+', "InstallerSha256: $InstallerSha256"
+    Set-Content -LiteralPath (Join-Path $DestDir $_.Name) -Value $content -NoNewline
+  }
+}
+
 $zipName = "wrec-v$Version-windows-amd64.zip"
 $zipPath = Join-Path $DistDir $zipName
 $stagingDir = Join-Path $DistDir "wrec-v$Version-windows-amd64"
@@ -42,24 +120,12 @@ Set-Content -LiteralPath (Join-Path $DistDir 'wrec.json') -Value $scoop -NoNewli
 
 # Winget manifests (wingetcreate layout: packaging/winget/manifests/m/Mew/Wrec/<version>/)
 $wingetRel = "winget/manifests/m/Mew/Wrec/$Version"
-$wingetTemplateDir = Join-Path $RepoRoot "packaging/$wingetRel"
-if (-not (Test-Path -LiteralPath $wingetTemplateDir)) {
-  throw "Winget manifest templates not found: packaging/$wingetRel (run wingetcreate for v$Version first)"
-}
+$wingetBase = Join-Path $RepoRoot 'packaging/winget/manifests/m/Mew/Wrec'
+$wingetTemplateDir = Initialize-WingetTemplateDir -BaseDir $wingetBase -TargetVersion $Version
 
-function Write-WingetManifests {
-  param([string]$DestDir)
-  New-Item -ItemType Directory -Force -Path $DestDir | Out-Null
-  Get-ChildItem -LiteralPath $wingetTemplateDir -Filter '*.yaml' | ForEach-Object {
-    $content = Get-Content -LiteralPath $_.FullName -Raw
-    $content = $content -replace 'PackageVersion: [^\r\n]+', "PackageVersion: $Version"
-    $content = $content -replace 'InstallerUrl: [^\r\n]+', "InstallerUrl: $releaseUrl"
-    $content = $content -replace 'InstallerSha256: [^\r\n]+', "InstallerSha256: $hash"
-    Set-Content -LiteralPath (Join-Path $DestDir $_.Name) -Value $content -NoNewline
-  }
-}
-
-Write-WingetManifests -DestDir (Join-Path $RepoRoot "packaging/$wingetRel")
-Write-WingetManifests -DestDir (Join-Path $DistDir $wingetRel)
+Write-WingetManifests -TemplateDir $wingetTemplateDir -DestDir (Join-Path $RepoRoot "packaging/$wingetRel") `
+  -PackageVersion $Version -InstallerUrl $releaseUrl -InstallerSha256 $hash
+Write-WingetManifests -TemplateDir $wingetTemplateDir -DestDir (Join-Path $DistDir $wingetRel) `
+  -PackageVersion $Version -InstallerUrl $releaseUrl -InstallerSha256 $hash
 
 Write-Host "Packaged $zipName (SHA256: $hash)"
