@@ -43,6 +43,7 @@ add_executable(wrec
     src/record/recorder_manager.cpp
     src/record/recorder.cpp
     src/record/mf_encoder.cpp
+    src/record/post_compress.cpp
 )
 
 target_include_directories(wrec PRIVATE

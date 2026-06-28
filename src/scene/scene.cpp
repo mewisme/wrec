@@ -74,44 +74,64 @@ void applyFallbackDims(std::vector<SourceDimensions> &dims,
 
 } // namespace
 
-ScaleMode parseScaleMode(const std::wstring &text) {
+Result<ScaleMode> parseScaleModeStrict(const std::wstring &text) {
+  if (equalsIgnoreCase(text, L"fit")) {
+    return Result<ScaleMode>::ok(ScaleMode::Fit);
+  }
   if (equalsIgnoreCase(text, L"fill")) {
-    return ScaleMode::Fill;
+    return Result<ScaleMode>::ok(ScaleMode::Fill);
   }
   if (equalsIgnoreCase(text, L"stretch")) {
-    return ScaleMode::Stretch;
+    return Result<ScaleMode>::ok(ScaleMode::Stretch);
   }
-  return ScaleMode::Fit;
+  return Result<ScaleMode>::fail("scale must be fit, fill, or stretch");
 }
 
-LayoutKind parseLayoutKind(const std::wstring &text) {
+const char *scaleModeName(ScaleMode mode) {
+  switch (mode) {
+  case ScaleMode::Fill:
+    return "fill";
+  case ScaleMode::Stretch:
+    return "stretch";
+  case ScaleMode::Fit:
+  default:
+    return "fit";
+  }
+}
+
+Result<LayoutKind> parseLayoutKind(const std::wstring &text) {
+  if (equalsIgnoreCase(text, L"auto")) {
+    return Result<LayoutKind>::ok(LayoutKind::Auto);
+  }
   if (equalsIgnoreCase(text, L"grid")) {
-    return LayoutKind::Grid;
+    return Result<LayoutKind>::ok(LayoutKind::Grid);
   }
   if (equalsIgnoreCase(text, L"horizontal")) {
-    return LayoutKind::Horizontal;
+    return Result<LayoutKind>::ok(LayoutKind::Horizontal);
   }
   if (equalsIgnoreCase(text, L"vertical")) {
-    return LayoutKind::Vertical;
+    return Result<LayoutKind>::ok(LayoutKind::Vertical);
   }
   if (equalsIgnoreCase(text, L"custom")) {
-    return LayoutKind::Custom;
+    return Result<LayoutKind>::ok(LayoutKind::Custom);
   }
-  return LayoutKind::Auto;
+  return Result<LayoutKind>::fail(
+      "layout must be auto, grid, horizontal, vertical, or custom");
 }
 
-std::wstring layoutKindName(LayoutKind kind) {
+const char *layoutKindName(LayoutKind kind) {
   switch (kind) {
   case LayoutKind::Grid:
-    return L"grid";
+    return "grid";
   case LayoutKind::Horizontal:
-    return L"horizontal";
+    return "horizontal";
   case LayoutKind::Vertical:
-    return L"vertical";
+    return "vertical";
   case LayoutKind::Custom:
-    return L"custom";
+    return "custom";
+  case LayoutKind::Auto:
   default:
-    return L"auto";
+    return "auto";
   }
 }
 
@@ -129,7 +149,7 @@ buildSceneFromOptions(const RecordOptions &options,
   }
 
   Scene scene{};
-  scene.layout = parseLayoutKind(options.layout);
+  scene.layout = options.layout;
   if (!options.customSources.empty()) {
     scene.layout = LayoutKind::Custom;
   }
@@ -172,7 +192,7 @@ buildSceneFromOptions(const RecordOptions &options,
     src.y = 0;
     src.w = static_cast<int>(scene.canvasWidth);
     src.h = static_cast<int>(scene.canvasHeight);
-    src.scale = ScaleMode::Stretch;
+    src.scale = options.scale;
     scene.sources.push_back(src);
     return Result<Scene>::ok(std::move(scene));
   }
@@ -221,6 +241,7 @@ buildSceneFromOptions(const RecordOptions &options,
         src.y = 0;
         src.w = evenDownInt(cellW);
         src.h = h;
+        src.scale = options.scale;
         scene.sources.push_back(src);
       }
     } else {
@@ -232,6 +253,7 @@ buildSceneFromOptions(const RecordOptions &options,
         src.y = 0;
         src.w = w;
         src.h = h;
+        src.scale = options.scale;
         scene.sources.push_back(src);
         x += w;
       }
@@ -249,6 +271,7 @@ buildSceneFromOptions(const RecordOptions &options,
         src.y = static_cast<int>(i) * cellH;
         src.w = w;
         src.h = evenDownInt(cellH);
+        src.scale = options.scale;
         scene.sources.push_back(src);
       }
     } else {
@@ -260,6 +283,7 @@ buildSceneFromOptions(const RecordOptions &options,
         src.y = y;
         src.w = w;
         src.h = h;
+        src.scale = options.scale;
         scene.sources.push_back(src);
         y += h;
       }
@@ -288,6 +312,7 @@ buildSceneFromOptions(const RecordOptions &options,
       src.y = static_cast<int>(row) * cellH;
       src.w = cellW;
       src.h = cellH;
+      src.scale = options.scale;
       scene.sources.push_back(src);
     }
   }

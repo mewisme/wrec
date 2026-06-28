@@ -1,5 +1,7 @@
 #pragma once
 
+#include "post_compress.h"
+#include "record_preset.h"
 #include "result.h"
 #include "scene.h"
 
@@ -16,13 +18,14 @@ struct RecordOptions {
   std::vector<unsigned long long> hwnds;
   std::vector<unsigned long> pids;
   std::vector<std::wstring> titles;
-  std::wstring layout = L"auto";
+  LayoutKind layout = LayoutKind::Auto;
+  ScaleMode scale = ScaleMode::Fit;
   uint32_t canvasWidth = 0;
   uint32_t canvasHeight = 0;
   std::vector<CustomSourceSpec> customSources;
   std::wstring outputPath;
   std::wstring outputDir;
-  std::wstring preset = L"medium";
+  RecordPreset preset = RecordPreset::Medium;
   int fps = 0;
   int bitrate = 0;
   bool fpsExplicit = false;
@@ -33,6 +36,7 @@ struct RecordOptions {
   double speed = 1.0;
   bool verbose = false;
   bool json = false;
+  CompressLevel compress = CompressLevel::Off;
 };
 
 struct InstallOptions {

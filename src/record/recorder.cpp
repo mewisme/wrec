@@ -4,6 +4,6 @@
 
 Status runRecorder(const RecordOptions &options,
                    std::atomic<bool> *stopRequested,
-                   std::atomic<int> *hotkeyPending) {
-  return runRecorderManager(options, stopRequested, hotkeyPending);
+                   std::atomic<int> *hotkeyPending, std::string *saveSummary) {
+  return runRecorderManager(options, stopRequested, hotkeyPending, saveSummary);
 }

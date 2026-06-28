@@ -119,7 +119,11 @@ Result<CustomSourceSpec> parseCustomSourceSpec(const std::wstring &text) {
     } else if (equalsIgnoreCase(key, L"h")) {
       spec.h = parseInt(value);
     } else if (equalsIgnoreCase(key, L"scale")) {
-      spec.scale = parseScaleMode(value);
+      const auto mode = parseScaleModeStrict(value);
+      if (!mode.isOk()) {
+        return Result<CustomSourceSpec>::fail(mode.error());
+      }
+      spec.scale = mode.value();
     } else {
       return Result<CustomSourceSpec>::fail("Unknown --source key: " +
                                             wideToUtf8(key));
@@ -178,7 +182,13 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
       } else if (isFlag(arg, L"--title", L't')) {
         cmd.record.titles.push_back(requireValue(i, argc, argv, "-t"));
       } else if (arg == L"--layout") {
-        cmd.record.layout = requireValue(i, argc, argv, "--layout");
+        const auto layout =
+            parseLayoutKind(requireValue(i, argc, argv, "--layout"));
+        if (!layout.isOk()) {
+          return Result<ParsedCommand>::fail(
+              "--layout expects auto, grid, horizontal, vertical, or custom");
+        }
+        cmd.record.layout = layout.value();
       } else if (arg == L"--canvas") {
         const std::wstring canvas = requireValue(i, argc, argv, "--canvas");
         if (!parseCanvasSize(canvas, cmd.record.canvasWidth,
@@ -193,19 +203,33 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
           return Result<ParsedCommand>::fail(spec.error());
         }
         cmd.record.customSources.push_back(spec.value());
-        cmd.record.layout = L"custom";
+        cmd.record.layout = LayoutKind::Custom;
       } else if (isFlag(arg, L"--out", L'o')) {
         cmd.record.outputPath = requireValue(i, argc, argv, "-o");
       } else if (isFlag(arg, L"--output-dir", L'd')) {
         cmd.record.outputDir = requireValue(i, argc, argv, "-d");
       } else if (arg == L"--preset") {
-        cmd.record.preset = requireValue(i, argc, argv, "--preset");
+        const auto preset =
+            parseRecordPreset(requireValue(i, argc, argv, "--preset"));
+        if (!preset.isOk()) {
+          return Result<ParsedCommand>::fail(
+              "--preset expects low, medium, high, ultra, or extreme");
+        }
+        cmd.record.preset = preset.value();
       } else if (arg == L"--fps") {
         cmd.record.fps = parseInt(requireValue(i, argc, argv, "--fps"));
         cmd.record.fpsExplicit = true;
       } else if (arg == L"--bitrate") {
         cmd.record.bitrate = parseInt(requireValue(i, argc, argv, "--bitrate"));
         cmd.record.bitrateExplicit = true;
+      } else if (arg == L"--compress") {
+        const auto level =
+            parseCompressLevel(requireValue(i, argc, argv, "--compress"));
+        if (!level.isOk()) {
+          return Result<ParsedCommand>::fail(
+              "--compress expects off, small, medium, or aggressive");
+        }
+        cmd.record.compress = level.value();
       } else if (arg == L"--cursor") {
         if (!parseOnOff(requireValue(i, argc, argv, "--cursor"),
                         cmd.record.cursor)) {
@@ -247,7 +271,7 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
       (cmd.record.canvasWidth == 0 || cmd.record.canvasHeight == 0)) {
     return Result<ParsedCommand>::fail("Custom layout requires --canvas WxH");
   }
-  if (parseLayoutKind(cmd.record.layout) == LayoutKind::Custom &&
+  if (cmd.record.layout == LayoutKind::Custom &&
       cmd.record.customSources.empty()) {
     return Result<ParsedCommand>::fail(
         "--layout custom requires one or more -S/--source entries");
@@ -257,9 +281,6 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
     return Result<ParsedCommand>::fail(outputResult.error());
   }
   cmd.record.outputPath = outputResult.value();
-  if (const auto preset = presetValues(cmd.record.preset); !preset.isOk()) {
-    return Result<ParsedCommand>::fail(preset.error());
-  }
   applyRecordPreset(cmd.record);
   if (cmd.record.fps <= 0 || cmd.record.fps > 240) {
     return Result<ParsedCommand>::fail("--fps must be between 1 and 240");
@@ -334,6 +355,9 @@ void printUsage() {
                "ultra, extreme (default: medium)\n"
                "      --fps <number>     Frame rate (overrides preset)\n"
                "      --bitrate <bps>    Video bitrate (overrides preset)\n"
+               "      --compress <level> Post-record re-encode: off, small,\n"
+               "                         medium, aggressive (default: off;\n"
+               "                         requires ffmpeg in PATH)\n"
                "      --cursor on|off    Draw cursor overlay (default: on)\n"
                "      --audio none       Audio not supported yet\n"
                "      --hotkeys on|off   Global hotkeys (default: on)\n"

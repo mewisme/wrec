@@ -112,12 +112,33 @@ Short flags are only available for targets, output paths, verbose, and custom so
 | — | `--preset` | medium | `low` … `extreme` |
 | — | `--fps` | preset | Frame rate |
 | — | `--bitrate` | preset | Bitrate in bps |
+| — | `--compress` | off | Post-record re-encode: `off`, `small`, `medium`, `aggressive` (requires ffmpeg in PATH) |
 | — | `--cursor` | on | Cursor on composed frame (`on` / `off`) |
 | — | `--hotkeys` | on | Global hotkeys (`on` / `off`) |
 | — | `--start-paused` | off | Arm capture; Ctrl+Alt+S to start writing |
 | — | `--speed` | 1 | Playback speed multiplier (`0.5`, `2x`, …) |
 | — | `--json` | off | JSON events on stderr |
 | — | `--audio` | — | Not implemented (`none` only) |
+
+---
+
+## Post-recording compression
+
+After the MP4 is finalized, `--compress` can re-encode the file with ffmpeg (must be on `PATH`). Recording still succeeds if ffmpeg is missing or compression fails; the original file is kept.
+
+| Level | Target video bitrate |
+|-------|----------------------|
+| `off` | No post-compression (default) |
+| `small` | 70% of recording bitrate |
+| `medium` | 45% of recording bitrate |
+| `aggressive` | 25% of recording bitrate |
+
+```powershell
+wrec r -t "Notepad" --compress small
+wrec r -t "Notepad" --compress medium --bitrate 8000000
+```
+
+Compression runs only after successful finalize. Audio is stripped in the compressed output (`-an`).
 
 ---
 

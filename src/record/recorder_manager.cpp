@@ -10,6 +10,7 @@
 #include "logging.h"
 #include "mf_encoder.h"
 #include "notification.h"
+#include "post_compress.h"
 #include "scene.h"
 #include "window_list.h"
 
@@ -85,7 +86,8 @@ buildCursorSources(const Scene &scene,
 
 Status runRecorderManager(const RecordOptions &options,
                           std::atomic<bool> *stopRequested,
-                          std::atomic<int> *hotkeyPending) {
+                          std::atomic<int> *hotkeyPending,
+                          std::string *saveSummary) {
   const auto support = checkCaptureSupport();
   if (!support.isOk()) {
     return Status::fail(support.error());
@@ -338,7 +340,7 @@ Status runRecorderManager(const RecordOptions &options,
       logMessage(LogLevel::Verbose,
                  "Scene canvas " + std::to_string(scene.canvasWidth) + "x" +
                      std::to_string(scene.canvasHeight) + " (" +
-                     wideToUtf8(layoutKindName(scene.layout)) + ')');
+                     layoutKindName(scene.layout) + ')');
     }
 
     compositor.compose(scene, synced.frames, outputBuffer);
@@ -412,8 +414,22 @@ Status runRecorderManager(const RecordOptions &options,
     if (auto st = encoder.finalize(); !st.isOk()) {
       return st;
     }
-    logMessage(LogLevel::Info, "Saved " + wideToUtf8(options.outputPath));
     logJsonEvent("finalized", "\"frames\":" + std::to_string(framesWritten));
+
+    std::string summary;
+    if (options.compress == CompressLevel::Off) {
+      summary = "Saved " + wideToUtf8(options.outputPath);
+    } else {
+      postCompressMp4WithFfmpeg(options.outputPath, options.bitrate,
+                                options.compress, stopRequested, &summary);
+      if (summary.empty()) {
+        summary = "Saved " + wideToUtf8(options.outputPath);
+      }
+    }
+    logMessage(LogLevel::Info, summary);
+    if (saveSummary != nullptr) {
+      *saveSummary = std::move(summary);
+    }
   }
 
   return Status::ok();

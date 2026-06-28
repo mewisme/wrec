@@ -45,9 +45,10 @@ struct SourceDimensions {
 
 struct RecordOptions;
 
-ScaleMode parseScaleMode(const std::wstring &text);
-LayoutKind parseLayoutKind(const std::wstring &text);
-std::wstring layoutKindName(LayoutKind kind);
+Result<ScaleMode> parseScaleModeStrict(const std::wstring &text);
+const char *scaleModeName(ScaleMode mode);
+Result<LayoutKind> parseLayoutKind(const std::wstring &text);
+const char *layoutKindName(LayoutKind kind);
 
 Result<Scene> buildSceneFromOptions(const RecordOptions &options,
                                     const std::vector<SourceDimensions> &dims);

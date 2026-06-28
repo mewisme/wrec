@@ -1,6 +1,7 @@
 #include "record_options.h"
 
 #include "logging.h"
+#include "record_preset.h"
 
 #include <Windows.h>
 #include <shlobj.h>
@@ -90,33 +91,60 @@ std::wstring defaultOutputDir() {
   return std::wstring(home) + L"\\Videos";
 }
 
-Result<PresetValues> presetValues(const std::wstring &name) {
-  if (equalsIgnoreCase(name, L"low")) {
+Result<RecordPreset> parseRecordPreset(const std::wstring &value) {
+  if (equalsIgnoreCase(value, L"low")) {
+    return Result<RecordPreset>::ok(RecordPreset::Low);
+  }
+  if (equalsIgnoreCase(value, L"medium")) {
+    return Result<RecordPreset>::ok(RecordPreset::Medium);
+  }
+  if (equalsIgnoreCase(value, L"high")) {
+    return Result<RecordPreset>::ok(RecordPreset::High);
+  }
+  if (equalsIgnoreCase(value, L"ultra")) {
+    return Result<RecordPreset>::ok(RecordPreset::Ultra);
+  }
+  if (equalsIgnoreCase(value, L"extreme")) {
+    return Result<RecordPreset>::ok(RecordPreset::Extreme);
+  }
+  return Result<RecordPreset>::fail(
+      "preset must be low, medium, high, ultra, or extreme");
+}
+
+const char *recordPresetName(RecordPreset preset) {
+  switch (preset) {
+  case RecordPreset::Low:
+    return "low";
+  case RecordPreset::Medium:
+    return "medium";
+  case RecordPreset::High:
+    return "high";
+  case RecordPreset::Ultra:
+    return "ultra";
+  case RecordPreset::Extreme:
+    return "extreme";
+  }
+  return "medium";
+}
+
+Result<PresetValues> presetValues(RecordPreset preset) {
+  switch (preset) {
+  case RecordPreset::Low:
     return Result<PresetValues>::ok({24, 2'000'000});
-  }
-  if (equalsIgnoreCase(name, L"medium")) {
+  case RecordPreset::Medium:
     return Result<PresetValues>::ok({30, 5'000'000});
-  }
-  if (equalsIgnoreCase(name, L"high")) {
+  case RecordPreset::High:
     return Result<PresetValues>::ok({45, 7'000'000});
-  }
-  if (equalsIgnoreCase(name, L"ultra")) {
+  case RecordPreset::Ultra:
     return Result<PresetValues>::ok({60, 8'000'000});
-  }
-  if (equalsIgnoreCase(name, L"extreme")) {
+  case RecordPreset::Extreme:
     return Result<PresetValues>::ok({60, 12'000'000});
   }
-  return Result<PresetValues>::fail(
-      "Unknown preset: " + wideToUtf8(name) +
-      " (expected low, medium, high, ultra, or extreme)");
+  return Result<PresetValues>::ok({30, 5'000'000});
 }
 
 void applyRecordPreset(RecordOptions &options) {
-  const auto preset = presetValues(options.preset);
-  if (!preset.isOk()) {
-    return;
-  }
-  const PresetValues values = preset.value();
+  const PresetValues values = presetValues(options.preset).value();
   if (!options.fpsExplicit) {
     options.fps = values.fps;
   }

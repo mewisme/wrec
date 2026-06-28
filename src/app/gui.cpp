@@ -28,7 +28,7 @@ namespace {
 
 constexpr wchar_t kWindowClass[] = L"wrec_gui";
 constexpr int kBaseClientWidth = 640;
-constexpr int kBaseClientHeight = 580;
+constexpr int kBaseClientHeight = 606;
 
 int guiDpi(HWND hwnd) {
   const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : GetDpiForSystem();
@@ -51,12 +51,14 @@ enum ControlId : int {
   IDC_BROWSE_DIR,
   IDC_PRESET,
   IDC_LAYOUT,
+  IDC_SCALE,
   IDC_FPS,
   IDC_BITRATE,
   IDC_CURSOR,
   IDC_HOTKEYS,
   IDC_START_PAUSED,
   IDC_SPEED,
+  IDC_COMPRESS,
   IDC_START,
   IDC_STOP,
   IDC_OPEN_RECENT,
@@ -70,6 +72,7 @@ struct RecordDonePayload {
   bool ok = false;
   std::string error;
   std::wstring outputPath;
+  std::wstring statusText;
 };
 
 struct GuiState {
@@ -278,13 +281,24 @@ void updateSelectedWindowDisplay(HWND hwnd) {
   setWindowText(selectedLabel, text.str());
 }
 
-std::wstring presetNameFromIndex(int index) {
-  static const wchar_t *kNames[] = {L"low", L"medium", L"high", L"ultra",
-                                    L"extreme"};
+RecordPreset recordPresetFromIndex(int index) {
+  static const RecordPreset kPresets[] = {
+      RecordPreset::Low, RecordPreset::Medium, RecordPreset::High,
+      RecordPreset::Ultra, RecordPreset::Extreme};
   if (index < 0 || index >= 5) {
-    return L"medium";
+    return RecordPreset::Medium;
   }
-  return kNames[index];
+  return kPresets[index];
+}
+
+CompressLevel compressLevelFromIndex(int index) {
+  static const CompressLevel kLevels[] = {
+      CompressLevel::Off, CompressLevel::Small, CompressLevel::Medium,
+      CompressLevel::Aggressive};
+  if (index < 0 || index >= 4) {
+    return CompressLevel::Off;
+  }
+  return kLevels[index];
 }
 
 void applyPresetFields(HWND hwnd) {
@@ -295,7 +309,7 @@ void applyPresetFields(HWND hwnd) {
   const int index = static_cast<int>(
       SendMessageW(GetDlgItem(hwnd, IDC_PRESET), CB_GETCURSEL, 0, 0));
   RecordOptions options{};
-  options.preset = presetNameFromIndex(index);
+  options.preset = recordPresetFromIndex(index);
   applyRecordPreset(options);
   setWindowText(GetDlgItem(hwnd, IDC_FPS), std::to_wstring(options.fps));
   setWindowText(GetDlgItem(hwnd, IDC_BITRATE),
@@ -373,6 +387,15 @@ void setRecordingUi(HWND hwnd, bool recording) {
   EnableWindow(GetDlgItem(hwnd, IDC_REFRESH), !recording ? TRUE : FALSE);
   EnableWindow(GetDlgItem(hwnd, IDC_SHOW_ALL), !recording ? TRUE : FALSE);
   EnableWindow(GetDlgItem(hwnd, IDC_LAYOUT), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_SCALE), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_PRESET), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_FPS), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_BITRATE), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_OUTPUT_FILE), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_BROWSE_FILE), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_OUTPUT_DIR), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_BROWSE_DIR), !recording ? TRUE : FALSE);
+  EnableWindow(GetDlgItem(hwnd, IDC_COMPRESS), !recording ? TRUE : FALSE);
   const bool canOpenRecent =
       !recording && g_state != nullptr && !g_state->lastRecordedPath.empty();
   EnableWindow(GetDlgItem(hwnd, IDC_OPEN_RECENT), canOpenRecent ? TRUE : FALSE);
@@ -396,13 +419,23 @@ void openRecentVideo(HWND hwnd) {
   }
 }
 
-std::wstring layoutNameFromIndex(int index) {
-  static const wchar_t *kNames[] = {L"auto", L"grid", L"horizontal",
-                                    L"vertical"};
+LayoutKind layoutKindFromIndex(int index) {
+  static const LayoutKind kLayouts[] = {LayoutKind::Auto, LayoutKind::Grid,
+                                        LayoutKind::Horizontal,
+                                        LayoutKind::Vertical};
   if (index < 0 || index >= 4) {
-    return L"auto";
+    return LayoutKind::Auto;
   }
-  return kNames[index];
+  return kLayouts[index];
+}
+
+ScaleMode scaleModeFromIndex(int index) {
+  static const ScaleMode kModes[] = {ScaleMode::Fit, ScaleMode::Fill,
+                                     ScaleMode::Stretch};
+  if (index < 0 || index >= 3) {
+    return ScaleMode::Fit;
+  }
+  return kModes[index];
 }
 
 Result<RecordOptions> buildRecordOptions(HWND hwnd) {
@@ -423,11 +456,13 @@ Result<RecordOptions> buildRecordOptions(HWND hwnd) {
     options.hwnds.push_back(static_cast<unsigned long long>(item.lParam));
   }
 
-  options.layout = layoutNameFromIndex(static_cast<int>(
+  options.layout = layoutKindFromIndex(static_cast<int>(
       SendMessageW(GetDlgItem(hwnd, IDC_LAYOUT), CB_GETCURSEL, 0, 0)));
+  options.scale = scaleModeFromIndex(static_cast<int>(
+      SendMessageW(GetDlgItem(hwnd, IDC_SCALE), CB_GETCURSEL, 0, 0)));
   options.outputPath = getWindowTextString(GetDlgItem(hwnd, IDC_OUTPUT_FILE));
   options.outputDir = getWindowTextString(GetDlgItem(hwnd, IDC_OUTPUT_DIR));
-  options.preset = presetNameFromIndex(static_cast<int>(
+  options.preset = recordPresetFromIndex(static_cast<int>(
       SendMessageW(GetDlgItem(hwnd, IDC_PRESET), CB_GETCURSEL, 0, 0)));
 
   try {
@@ -439,6 +474,9 @@ Result<RecordOptions> buildRecordOptions(HWND hwnd) {
   }
   options.fpsExplicit = g_state != nullptr && g_state->fpsUserEdited;
   options.bitrateExplicit = g_state != nullptr && g_state->bitrateUserEdited;
+
+  options.compress = compressLevelFromIndex(static_cast<int>(
+      SendMessageW(GetDlgItem(hwnd, IDC_COMPRESS), CB_GETCURSEL, 0, 0)));
 
   options.cursor = IsDlgButtonChecked(hwnd, IDC_CURSOR) == BST_CHECKED;
   options.hotkeys = IsDlgButtonChecked(hwnd, IDC_HOTKEYS) == BST_CHECKED;
@@ -456,9 +494,6 @@ Result<RecordOptions> buildRecordOptions(HWND hwnd) {
     return Result<RecordOptions>::fail("Invalid speed value");
   }
 
-  if (const auto preset = presetValues(options.preset); !preset.isOk()) {
-    return Result<RecordOptions>::fail(preset.error());
-  }
   applyRecordPreset(options);
 
   if (options.fps <= 0 || options.fps > 240) {
@@ -552,12 +587,16 @@ void startRecording(HWND hwnd) {
   }
   g_state->recordThread = std::thread([hwnd, options]() {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
-    const Status result =
-        runRecorder(options, &g_state->stopRequested, &g_state->pendingHotkey);
+    std::string saveSummary;
+    const Status result = runRecorder(options, &g_state->stopRequested,
+                                      &g_state->pendingHotkey, &saveSummary);
     winrt::uninit_apartment();
     auto *payload = new RecordDonePayload{};
     payload->ok = result.isOk();
     payload->outputPath = options.outputPath;
+    if (!saveSummary.empty()) {
+      payload->statusText = utf8ToWide(saveSummary);
+    }
     if (!result.isOk()) {
       payload->error = result.error();
     }
@@ -586,7 +625,11 @@ void onRecordDone(HWND hwnd, RecordDonePayload *payload) {
     if (!payload->outputPath.empty()) {
       g_state->lastRecordedPath = payload->outputPath;
     }
-    setStatus(L"Saved " + payload->outputPath);
+    if (!payload->statusText.empty()) {
+      setStatus(payload->statusText);
+    } else {
+      setStatus(L"Saved " + payload->outputPath);
+    }
   } else {
     setStatus(L"Error: " + utf8ToWide(payload->error));
   }
@@ -637,6 +680,19 @@ void createChildControls(HWND hwnd) {
                reinterpret_cast<LPARAM>(L"vertical"));
   SendMessageW(layoutCombo, CB_SETCURSEL, 0, 0);
 
+  createLabel(hwnd, L"Scale:", px(178), px(224), px(44), px(18));
+  const HWND scaleCombo =
+      CreateWindowExW(0, L"COMBOBOX", L"",
+                      WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                      px(224), px(220), px(88), px(120), hwnd,
+                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_SCALE)),
+                      nullptr, nullptr);
+  SendMessageW(scaleCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"fit"));
+  SendMessageW(scaleCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"fill"));
+  SendMessageW(scaleCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"stretch"));
+  SendMessageW(scaleCombo, CB_SETCURSEL, 0, 0);
+
   createLabel(hwnd, L"Output file:", margin, px(252), px(84), px(18));
   createEdit(hwnd, IDC_OUTPUT_FILE, px(92), px(248), editW, px(24));
   createButton(hwnd, IDC_BROWSE_FILE, L"Browse...", margin + px(92) + editW,
@@ -677,28 +733,45 @@ void createChildControls(HWND hwnd) {
   createEdit(hwnd, IDC_SPEED, px(400), px(336), px(52), px(24));
   setWindowText(GetDlgItem(hwnd, IDC_SPEED), L"1");
 
-  createButton(hwnd, IDC_START, L"Start Recording", margin, px(368), px(144),
+  createLabel(hwnd, L"Compress:", margin, px(366), px(72), px(18));
+  const HWND compressCombo = CreateWindowExW(
+      0, L"COMBOBOX", L"",
+      WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, px(76), px(362),
+      px(108), px(120), hwnd,
+      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_COMPRESS)), nullptr,
+      nullptr);
+  SendMessageW(compressCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"off"));
+  SendMessageW(compressCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"small"));
+  SendMessageW(compressCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"medium"));
+  SendMessageW(compressCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"aggressive"));
+  SendMessageW(compressCombo, CB_SETCURSEL, 0, 0);
+
+  createButton(hwnd, IDC_START, L"Start Recording", margin, px(394), px(144),
                px(30));
-  createButton(hwnd, IDC_STOP, L"Stop", px(160), px(368), px(88), px(30));
-  createButton(hwnd, IDC_OPEN_RECENT, L"Play Recent", px(256), px(368), px(120),
+  createButton(hwnd, IDC_STOP, L"Stop", px(160), px(394), px(88), px(30));
+  createButton(hwnd, IDC_OPEN_RECENT, L"Play Recent", px(256), px(394), px(120),
                px(30));
   EnableWindow(GetDlgItem(hwnd, IDC_STOP), FALSE);
   EnableWindow(GetDlgItem(hwnd, IDC_OPEN_RECENT), FALSE);
 
   CreateWindowExW(0, L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE, margin,
-                  px(404), innerW, px(18), hwnd,
+                  px(430), innerW, px(18), hwnd,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STATUS)),
                   nullptr, nullptr);
 
   const int installBtnW = px(92);
   const int installEditW = innerW - px(84) - installBtnW;
-  createLabel(hwnd, L"Install dir:", margin, px(446), px(80), px(18));
-  createEdit(hwnd, IDC_INSTALL_DIR, px(88), px(442), installEditW, px(24));
+  createLabel(hwnd, L"Install dir:", margin, px(472), px(80), px(18));
+  createEdit(hwnd, IDC_INSTALL_DIR, px(88), px(468), installEditW, px(24));
   setWindowText(GetDlgItem(hwnd, IDC_INSTALL_DIR), defaultInstallDir());
   createButton(hwnd, IDC_INSTALL, L"Install", margin + px(88) + installEditW,
-               px(440), installBtnW, px(28));
+               px(466), installBtnW, px(28));
   createButton(hwnd, IDC_UNINSTALL, L"Uninstall",
-               margin + px(88) + installEditW, px(472), installBtnW, px(28));
+               margin + px(88) + installEditW, px(498), installBtnW, px(28));
 
   setupListColumns(GetDlgItem(hwnd, IDC_LIST), dpi);
   applyPresetFields(hwnd);
