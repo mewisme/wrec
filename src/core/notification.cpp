@@ -1,5 +1,7 @@
 #include "notification.h"
 
+#include "resource.h"
+
 #include <Windows.h>
 #include <shellapi.h>
 
@@ -20,7 +22,8 @@ HWND messageHostWindow() {
 
 HICON trayIconHandle() {
   if (g_trayIcon == nullptr) {
-    g_trayIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    g_trayIcon =
+        LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCE(IDI_WREC));
   }
   return g_trayIcon;
 }

@@ -12,7 +12,7 @@ wrec captures **top-level windows** (not the full desktop), composes them into o
 - **CLI and GUI** — run `wrec` for the GUI, or script with `wrec record`
 - **Quality presets** — low through extreme; override FPS and bitrate anytime
 - **Global hotkeys** — stop, pause, and quit while recording
-- **PATH install** — `wrec install` copies to `%USERPROFILE%\.local\bin`
+- **PATH install** — `wrec install` copies to `%USERPROFILE%\.local\bin` and adds desktop + Start menu shortcuts named **wrec**
 
 ## Installation
 
@@ -24,7 +24,7 @@ Windows x64 only.
 winget install Mew.Wrec
 ```
 
-Package identifier: `Mew.Wrec`
+Package identifier: `Mew.Wrec`. First GUI launch creates desktop and Start menu shortcuts named **wrec** (winget portable installs do not support shortcut manifests).
 
 ### Scoop
 
@@ -34,6 +34,8 @@ Add this repo as a bucket (one-time), then install:
 scoop bucket add mew https://github.com/mewisme/wrec
 scoop install wrec
 ```
+
+Install adds **wrec** shortcuts on the desktop and in the Start menu.
 
 Updates: 
 
@@ -93,7 +95,7 @@ wrec -V
 .\wrec.exe r -t "Notepad" -d .\captures
 ```
 
-Running `wrec` with no command opens the GUI. Closing the window hides it to the system tray; use the tray icon to show the window again or exit completely.
+Running `wrec` with no command opens the GUI. Double-clicking `wrec.exe` shows the GUI only.
 
 **From source** — see [docs/build.md](docs/build.md):
 

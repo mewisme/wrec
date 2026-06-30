@@ -7,7 +7,10 @@
 #include "path_install.h"
 #include "record_options.h"
 #include "recorder.h"
+#include "resource.h"
 #include "window_list.h"
+
+#include <cstring>
 
 #include <Windows.h>
 #include <winrt/base.h>
@@ -539,6 +542,29 @@ void showGui(HWND hwnd) {
 
 void hideGui(HWND hwnd) { ShowWindow(hwnd, SW_HIDE); }
 
+bool isConsoleWindowVisible(HWND console) {
+  return console != nullptr && IsWindowVisible(console) != FALSE &&
+         !IsIconic(console);
+}
+
+void hideConsoleWindow(HWND console) {
+  if (console != nullptr) {
+    ShowWindow(console, SW_HIDE);
+  }
+}
+
+void showConsoleWindow(HWND console) {
+  if (console == nullptr) {
+    return;
+  }
+  if (IsIconic(console)) {
+    ShowWindow(console, SW_RESTORE);
+  } else {
+    ShowWindow(console, SW_SHOW);
+  }
+  SetForegroundWindow(console);
+}
+
 void hideGuiToTray(HWND hwnd) {
   hideGui(hwnd);
   if (g_state != nullptr && !g_state->trayNoticeShown) {
@@ -586,9 +612,9 @@ void showTrayMenu(HWND hwnd, POINT pt) {
 
   const HWND console = GetConsoleWindow();
   if (console != nullptr) {
-    const bool consoleVisible = IsWindowVisible(console) != FALSE;
     AppendMenuW(menu, MF_STRING, TRAY_TOGGLE_CONSOLE,
-                consoleVisible ? L"Hide Console" : L"Show Console");
+                isConsoleWindowVisible(console) ? L"Hide Console"
+                                                : L"Show Console");
   }
 
   const bool recording = g_state != nullptr && g_state->recording.load();
@@ -639,7 +665,7 @@ BOOL WINAPI guiConsoleCtrlHandler(DWORD ctrlType) {
       return TRUE;
     }
     if (const HWND console = GetConsoleWindow(); console != nullptr) {
-      ShowWindow(console, SW_HIDE);
+      hideConsoleWindow(console);
     }
     return TRUE;
   default:
@@ -971,7 +997,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case TRAY_TOGGLE_CONSOLE: {
       const HWND console = GetConsoleWindow();
       if (console != nullptr) {
-        ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
+        if (isConsoleWindowVisible(console)) {
+          hideConsoleWindow(console);
+        } else {
+          showConsoleWindow(console);
+        }
       }
       return 0;
     }
@@ -1073,8 +1103,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 } // namespace
 
+// ponytail: GetConsoleProcessList count<=1 means we own a fresh console
+// (double-click / Run dialog), not a shared terminal.
+void hideConsoleIfStandaloneLaunch() {
+  const HWND console = GetConsoleWindow();
+  if (console == nullptr) {
+    return;
+  }
+  DWORD pids[2]{};
+  if (GetConsoleProcessList(pids, 2) <= 1) {
+    ShowWindow(console, SW_HIDE);
+  }
+}
+
 int runGui() {
   const HRESULT oleHr = OleInitialize(nullptr);
+
+  if (const auto exe = currentExePath(); exe.isOk()) {
+    const char *src = detectInstallSource();
+    if (std::strcmp(src, "winget") == 0 || std::strcmp(src, "portable") == 0) {
+      ensureAppShortcuts(exe.value());
+    }
+  }
 
   g_wmTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
@@ -1102,6 +1152,8 @@ int runGui() {
   wc.cbSize = sizeof(wc);
   wc.lpfnWndProc = WindowProc;
   wc.hInstance = GetModuleHandleW(nullptr);
+  wc.hIcon = LoadIconW(wc.hInstance, MAKEINTRESOURCE(IDI_WREC));
+  wc.hIconSm = LoadIconW(wc.hInstance, MAKEINTRESOURCE(IDI_WREC));
   wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
   wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
   wc.lpszClassName = kWindowClass;

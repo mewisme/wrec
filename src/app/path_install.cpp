@@ -4,6 +4,9 @@
 #include "logging.h"
 
 #include <Windows.h>
+#include <objbase.h>
+#include <shlobj.h>
+#include <shobjidl.h>
 
 #include <algorithm>
 #include <cstring>
@@ -91,16 +94,6 @@ std::wstring joinPathList(const std::vector<std::wstring> &parts) {
   return out;
 }
 
-Result<std::wstring> currentExePath() {
-  wchar_t buf[MAX_PATH]{};
-  const DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
-  if (len == 0 || len >= MAX_PATH) {
-    return Result<std::wstring>::fail(
-        "Failed to resolve current executable path");
-  }
-  return Result<std::wstring>::ok(std::wstring(buf));
-}
-
 Status ensureDirectory(const std::wstring &dir) {
   std::error_code ec;
   fs::create_directories(fs::path(dir), ec);
@@ -128,6 +121,101 @@ Status copyCurrentExeTo(const std::wstring &destExe) {
 }
 
 } // namespace
+
+Result<std::wstring> knownFolderPath(REFKNOWNFOLDERID id) {
+  PWSTR path = nullptr;
+  const HRESULT hr = SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, nullptr, &path);
+  if (FAILED(hr) || path == nullptr) {
+    return Result<std::wstring>::fail("SHGetKnownFolderPath failed: " +
+                                     formatHresult(hr));
+  }
+  std::wstring result(path);
+  CoTaskMemFree(path);
+  return Result<std::wstring>::ok(std::move(result));
+}
+
+Status createShellShortcut(const std::wstring &lnkPath,
+                           const std::wstring &targetExe) {
+  const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+  IShellLinkW *link = nullptr;
+  HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&link));
+  if (FAILED(hr)) {
+    if (coHr == S_OK) {
+      CoUninitialize();
+    }
+    return Status::fail("CoCreateInstance(ShellLink) failed: " +
+                        formatHresult(hr));
+  }
+
+  link->SetPath(targetExe.c_str());
+  const std::wstring workDir = fs::path(targetExe).parent_path().wstring();
+  if (!workDir.empty()) {
+    link->SetWorkingDirectory(workDir.c_str());
+  }
+  link->SetDescription(L"wrec");
+
+  IPersistFile *file = nullptr;
+  hr = link->QueryInterface(IID_PPV_ARGS(&file));
+  link->Release();
+  if (FAILED(hr)) {
+    if (coHr == S_OK) {
+      CoUninitialize();
+    }
+    return Status::fail("ShellLink QueryInterface failed: " +
+                        formatHresult(hr));
+  }
+
+  hr = file->Save(lnkPath.c_str(), TRUE);
+  file->Release();
+  if (coHr == S_OK) {
+    CoUninitialize();
+  }
+  if (FAILED(hr)) {
+    return Status::fail("Failed to save shortcut: " + formatHresult(hr));
+  }
+  return Status::ok();
+}
+
+Result<std::wstring> currentExePath() {
+  wchar_t buf[MAX_PATH]{};
+  const DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+  if (len == 0 || len >= MAX_PATH) {
+    return Result<std::wstring>::fail(
+        "Failed to resolve current executable path");
+  }
+  return Result<std::wstring>::ok(std::wstring(buf));
+}
+
+Status ensureAppShortcuts(const std::wstring &exePath) {
+  const auto desktop = knownFolderPath(FOLDERID_Desktop);
+  if (!desktop.isOk()) {
+    return Status::fail(desktop.error());
+  }
+  const auto programs = knownFolderPath(FOLDERID_Programs);
+  if (!programs.isOk()) {
+    return Status::fail(programs.error());
+  }
+
+  if (auto st = createShellShortcut(desktop.value() + L"\\wrec.lnk", exePath);
+      !st.isOk()) {
+    return st;
+  }
+  return createShellShortcut(programs.value() + L"\\wrec.lnk", exePath);
+}
+
+Status removeAppShortcuts() {
+  const auto desktop = knownFolderPath(FOLDERID_Desktop);
+  if (desktop.isOk()) {
+    DeleteFileW((desktop.value() + L"\\wrec.lnk").c_str());
+  }
+  const auto programs = knownFolderPath(FOLDERID_Programs);
+  if (programs.isOk()) {
+    DeleteFileW((programs.value() + L"\\wrec.lnk").c_str());
+  }
+  return Status::ok();
+}
 
 std::wstring defaultInstallDir() {
   const std::wstring home = getEnvVar(L"USERPROFILE");
@@ -232,6 +320,11 @@ Status installToPath(const InstallOptions &options) {
   } else {
     logMessage(LogLevel::Info, "Already on user PATH: " + wideToUtf8(dir));
   }
+  if (auto st = ensureAppShortcuts(destExe); !st.isOk()) {
+    logMessage(LogLevel::Error, st.error());
+    return st;
+  }
+  logMessage(LogLevel::Info, "Created desktop and Start menu shortcuts.");
   logMessage(LogLevel::Info,
              "Restart your terminal to use `wrec` from anywhere.");
   return Status::ok();
@@ -283,6 +376,9 @@ Status uninstallFromPath(const InstallOptions &options) {
       logMessage(LogLevel::Info, "Deleted " + wideToUtf8(destExe));
     }
   }
+
+  removeAppShortcuts();
+  logMessage(LogLevel::Info, "Removed desktop and Start menu shortcuts.");
 
   logMessage(LogLevel::Info, "Uninstall complete. Restart your terminal.");
   return Status::ok();

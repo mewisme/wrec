@@ -149,7 +149,8 @@ try {
     Fail "wrec install exited with code $LASTEXITCODE."
   }
 
-  Write-Step "Done. Restart your terminal, then run: wrec --help"
+  Write-Step "Done. Desktop and Start menu shortcuts named wrec were created."
+  Write-Step "Restart your terminal, then run: wrec --help"
 }
 finally {
   if (Test-Path -LiteralPath $tempRoot) {

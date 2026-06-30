@@ -10,6 +10,21 @@
     }
   },
   "bin": "wrec.exe",
+  "post_install": [
+    "$wsh = New-Object -ComObject WScript.Shell",
+    "foreach ($folder in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {",
+    "  $lnk = $wsh.CreateShortcut(\"$folder\\wrec.lnk\")",
+    "  $lnk.TargetPath = \"$dir\\wrec.exe\"",
+    "  $lnk.WorkingDirectory = \"$dir\"",
+    "  $lnk.Description = 'wrec'",
+    "  $lnk.Save()",
+    "}"
+  ],
+  "pre_uninstall": [
+    "foreach ($folder in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {",
+    "  Remove-Item \"$folder\\wrec.lnk\" -Force -ErrorAction SilentlyContinue",
+    "}"
+  ],
   "checkver": {
     "github": "mewisme/wrec"
   },

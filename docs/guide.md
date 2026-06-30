@@ -10,6 +10,8 @@ wrec uninstall
 
 Manual ZIP / PowerShell installs only — not available when wrec was installed via winget or scoop.
 
+`wrec install` copies the executable to your user PATH, and creates **wrec** shortcuts on the desktop and in the Start menu. `wrec uninstall` removes them.
+
 Restart your terminal after install or uninstall so PATH changes take effect.
 
 The GUI also has **Install** / **Uninstall** controls at the bottom of the window.
@@ -26,6 +28,8 @@ wrec gui
 ```
 
 Both open the same GUI. With no subcommand, `wrec` defaults to the GUI.
+
+Double-clicking `wrec.exe` opens the GUI with the console window hidden. Launching from a terminal keeps the console visible.
 
 ### Workflow
 

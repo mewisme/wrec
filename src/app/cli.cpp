@@ -513,6 +513,9 @@ void logAppVersion() {
 
 int runCommand(const ParsedCommand &command) {
   configureLogging(command);
+  if (command.kind == ParsedCommand::Kind::Gui) {
+    hideConsoleIfStandaloneLaunch();
+  }
   logAppVersion();
   switch (command.kind) {
   case ParsedCommand::Kind::Help:

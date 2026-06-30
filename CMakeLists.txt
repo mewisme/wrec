@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(wrec VERSION 1.0.0 LANGUAGES CXX)
+project(wrec VERSION 1.0.0 LANGUAGES CXX RC)
 
 # ponytail: semver must be STRING — unquoted -D0.1.8 is parsed as 0 by CMake/MSVC
 set(WREC_VERSION "${PROJECT_VERSION}" CACHE STRING "Version string embedded in wrec.exe")
@@ -27,6 +27,7 @@ if(NOT CMAKE_GENERATOR MATCHES "Visual Studio" AND NOT CMAKE_BUILD_TYPE)
 endif()
 
 add_executable(wrec
+    src/res/wrec.rc
     src/main.cpp
     src/app/cli.cpp
     src/app/gui.cpp
@@ -51,6 +52,7 @@ add_executable(wrec
 )
 
 target_include_directories(wrec PRIVATE
+    src/res
     src
     src/app
     src/core
