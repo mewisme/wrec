@@ -179,6 +179,7 @@ Status createShellShortcut(const std::wstring &lnkPath,
   }
 
   link->SetPath(targetExe.c_str());
+  link->SetArguments(L"gui");
   const std::wstring workDir = fs::path(targetExe).parent_path().wstring();
   if (!workDir.empty()) {
     link->SetWorkingDirectory(workDir.c_str());

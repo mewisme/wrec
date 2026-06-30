@@ -32,7 +32,7 @@ namespace {
 
 constexpr wchar_t kWindowClass[] = L"wrec_gui";
 constexpr int kBaseClientWidth = 640;
-constexpr int kBaseClientHeight = 606;
+constexpr int kBaseClientHeight = 628;
 
 int guiDpi(HWND hwnd) {
   const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : GetDpiForSystem();
@@ -47,7 +47,6 @@ constexpr UINT WM_TRAYICON = WM_APP + 10;
 
 enum TrayMenuId : int {
   TRAY_TOGGLE_GUI = 2001,
-  TRAY_TOGGLE_CONSOLE,
   TRAY_START_STOP,
   TRAY_PAUSE_RESUME,
   TRAY_OPEN_FOLDER,
@@ -77,6 +76,7 @@ enum ControlId : int {
   IDC_STOP,
   IDC_OPEN_RECENT,
   IDC_STATUS,
+  IDC_MINIMIZE_TO_TRAY,
   IDC_INSTALL_DIR,
   IDC_INSTALL,
   IDC_UNINSTALL,
@@ -542,29 +542,6 @@ void showGui(HWND hwnd) {
 
 void hideGui(HWND hwnd) { ShowWindow(hwnd, SW_HIDE); }
 
-bool isConsoleWindowVisible(HWND console) {
-  return console != nullptr && IsWindowVisible(console) != FALSE &&
-         !IsIconic(console);
-}
-
-void hideConsoleWindow(HWND console) {
-  if (console != nullptr) {
-    ShowWindow(console, SW_HIDE);
-  }
-}
-
-void showConsoleWindow(HWND console) {
-  if (console == nullptr) {
-    return;
-  }
-  if (IsIconic(console)) {
-    ShowWindow(console, SW_RESTORE);
-  } else {
-    ShowWindow(console, SW_SHOW);
-  }
-  SetForegroundWindow(console);
-}
-
 void hideGuiToTray(HWND hwnd) {
   hideGui(hwnd);
   if (g_state != nullptr && !g_state->trayNoticeShown) {
@@ -610,13 +587,6 @@ void showTrayMenu(HWND hwnd, POINT pt) {
   AppendMenuW(menu, MF_STRING, TRAY_TOGGLE_GUI,
               guiVisible ? L"Hide GUI" : L"Show GUI");
 
-  const HWND console = GetConsoleWindow();
-  if (console != nullptr) {
-    AppendMenuW(menu, MF_STRING, TRAY_TOGGLE_CONSOLE,
-                isConsoleWindowVisible(console) ? L"Hide Console"
-                                                : L"Show Console");
-  }
-
   const bool recording = g_state != nullptr && g_state->recording.load();
   AppendMenuW(menu, MF_STRING, TRAY_START_STOP,
               recording ? L"Stop Recording" : L"Start Recording");
@@ -645,32 +615,6 @@ void requestStopAndSave(bool exitAfterSave) {
     g_state->allowExit = true;
   }
   setStatus(L"Stopping and saving...");
-}
-
-BOOL WINAPI guiConsoleCtrlHandler(DWORD ctrlType) {
-  if (g_state == nullptr) {
-    return FALSE;
-  }
-  switch (ctrlType) {
-  case CTRL_C_EVENT:
-  case CTRL_BREAK_EVENT:
-    if (g_state->recording.load()) {
-      requestStopAndSave(true);
-      return TRUE;
-    }
-    return FALSE;
-  case CTRL_CLOSE_EVENT:
-    if (g_state->recording.load()) {
-      requestStopAndSave(true);
-      return TRUE;
-    }
-    if (const HWND console = GetConsoleWindow(); console != nullptr) {
-      hideConsoleWindow(console);
-    }
-    return TRUE;
-  default:
-    return FALSE;
-  }
 }
 
 void dispatchGuiHotkey(int hotkeyId) {
@@ -897,15 +841,18 @@ void createChildControls(HWND hwnd) {
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STATUS)),
                   nullptr, nullptr);
 
+  createCheck(hwnd, IDC_MINIMIZE_TO_TRAY, L"Minimize to tray when closed",
+              margin, px(452), innerW - margin * 2, px(22), true);
+
   const int installBtnW = px(92);
   const int installEditW = innerW - px(84) - installBtnW;
-  createLabel(hwnd, L"Install dir:", margin, px(472), px(80), px(18));
-  createEdit(hwnd, IDC_INSTALL_DIR, px(88), px(468), installEditW, px(24));
+  createLabel(hwnd, L"Install dir:", margin, px(494), px(80), px(18));
+  createEdit(hwnd, IDC_INSTALL_DIR, px(88), px(490), installEditW, px(24));
   setWindowText(GetDlgItem(hwnd, IDC_INSTALL_DIR), defaultInstallDir());
   createButton(hwnd, IDC_INSTALL, L"Install", margin + px(88) + installEditW,
-               px(466), installBtnW, px(28));
+               px(488), installBtnW, px(28));
   createButton(hwnd, IDC_UNINSTALL, L"Uninstall",
-               margin + px(88) + installEditW, px(498), installBtnW, px(28));
+               margin + px(88) + installEditW, px(520), installBtnW, px(28));
 
   setupListColumns(GetDlgItem(hwnd, IDC_LIST), dpi);
   applyPresetFields(hwnd);
@@ -994,17 +941,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         showGui(hwnd);
       }
       return 0;
-    case TRAY_TOGGLE_CONSOLE: {
-      const HWND console = GetConsoleWindow();
-      if (console != nullptr) {
-        if (isConsoleWindowVisible(console)) {
-          hideConsoleWindow(console);
-        } else {
-          showConsoleWindow(console);
-        }
-      }
-      return 0;
-    }
     case TRAY_START_STOP:
       if (g_state != nullptr && g_state->recording.load()) {
         stopRecording();
@@ -1065,7 +1001,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       DestroyWindow(hwnd);
       return 0;
     }
-    hideGuiToTray(hwnd);
+    if (IsDlgButtonChecked(hwnd, IDC_MINIMIZE_TO_TRAY) == BST_CHECKED) {
+      hideGuiToTray(hwnd);
+    } else {
+      requestAppExit(hwnd);
+    }
     return 0;
   case WM_DESTROY:
     PostQuitMessage(0);
@@ -1103,16 +1043,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 } // namespace
 
-// ponytail: GetConsoleProcessList count<=1 means we own a fresh console
-// (double-click / Run dialog), not a shared terminal.
-void hideConsoleIfStandaloneLaunch() {
-  const HWND console = GetConsoleWindow();
-  if (console == nullptr) {
-    return;
+bool isGuiLaunch(int argc, wchar_t *argv[]) {
+  if (argc < 2) {
+    return true;
   }
-  DWORD pids[2]{};
-  if (GetConsoleProcessList(pids, 2) <= 1) {
-    ShowWindow(console, SW_HIDE);
+  if (_wcsicmp(argv[1], L"gui") == 0) {
+    return true;
+  }
+  return _wcsicmp(argv[1], L"--no-window") == 0 ||
+         _wcsicmp(argv[1], L"--no-console") == 0;
+}
+
+void detachGuiConsole() {
+  if (GetConsoleWindow() != nullptr) {
+    FreeConsole();
   }
 }
 
@@ -1182,8 +1126,6 @@ int runGui() {
 
   trayIconInstall(state.hwnd, WM_TRAYICON);
 
-  SetConsoleCtrlHandler(guiConsoleCtrlHandler, TRUE);
-
   MSG msg{};
   while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
     TranslateMessage(&msg);
@@ -1199,7 +1141,6 @@ int runGui() {
 
   trayIconRemove();
 
-  SetConsoleCtrlHandler(nullptr, FALSE);
   logSetGuiSink({});
   g_state = nullptr;
   if (SUCCEEDED(oleHr)) {

@@ -350,6 +350,7 @@ void printUsage() {
       << " - Windows CLI screen recorder\n\n"
          "Usage:\n"
          "  wrec [gui]             Open GUI (default)\n"
+         "  wrec gui               Open GUI\n"
          "  wrec list|l [-a] [-j] [-v]\n"
          "  wrec record|rec|r (-w <HWND> | -p <PID> | -t <text> | "
          "-S <spec>) [-o <file.mp4>] [options]\n"
@@ -437,6 +438,11 @@ Result<ParsedCommand> parseCommandLine(int argc, wchar_t *argv[]) {
     return Result<ParsedCommand>::ok(std::move(cmd));
   }
 
+  if (sub == L"--no-window" || sub == L"--no-console") {
+    cmd.kind = ParsedCommand::Kind::Gui;
+    return Result<ParsedCommand>::ok(std::move(cmd));
+  }
+
   if (sub == L"uninstall") {
     cmd.kind = ParsedCommand::Kind::Uninstall;
     return parseInstallArgs(std::move(cmd), argc, argv, true);
@@ -513,9 +519,6 @@ void logAppVersion() {
 
 int runCommand(const ParsedCommand &command) {
   configureLogging(command);
-  if (command.kind == ParsedCommand::Kind::Gui) {
-    hideConsoleIfStandaloneLaunch();
-  }
   logAppVersion();
   switch (command.kind) {
   case ParsedCommand::Kind::Help:
