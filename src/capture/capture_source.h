@@ -30,7 +30,6 @@ public:
 
 private:
   bool checkOcclusionCached();
-  Status ensureStaging(uint32_t width, uint32_t height);
   Status copyTextureToCpu(ID3D11Texture2D *texture, uint32_t width,
                           uint32_t height);
   void updateFromPrintWindow();
@@ -38,10 +37,6 @@ private:
   D3dDevice &device_;
   WindowInfo info_;
   class WgcCapture *capture_ = nullptr;
-
-  Microsoft::WRL::ComPtr<ID3D11Texture2D> staging_;
-  uint32_t stagingWidth_ = 0;
-  uint32_t stagingHeight_ = 0;
 
   mutable std::mutex mutex_;
   std::vector<uint8_t> cpuBuffer_;

@@ -6,7 +6,7 @@
 #include "notification.h"
 #include "path_install.h"
 #include "record_options.h"
-#include "recorder.h"
+#include "recorder_manager.h"
 #include "resource.h"
 #include "window_list.h"
 
@@ -107,21 +107,6 @@ struct GuiState {
 
 GuiState *g_state = nullptr;
 UINT g_wmTaskbarCreated = 0;
-
-std::wstring utf8ToWide(const std::string &text) {
-  if (text.empty()) {
-    return {};
-  }
-  const int size = MultiByteToWideChar(
-      CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0);
-  if (size <= 0) {
-    return {};
-  }
-  std::wstring wide(static_cast<size_t>(size), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()),
-                      wide.data(), size);
-  return wide;
-}
 
 std::wstring getWindowTextString(HWND control) {
   const int len = GetWindowTextLengthW(control);

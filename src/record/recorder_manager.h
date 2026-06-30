@@ -5,7 +5,7 @@
 
 #include <atomic>
 
-Status runRecorderManager(const RecordOptions &options,
-                          std::atomic<bool> *stopRequested = nullptr,
-                          std::atomic<int> *hotkeyPending = nullptr,
-                          std::string *saveSummary = nullptr);
+Status runRecorder(const RecordOptions &options,
+                   std::atomic<bool> *stopRequested = nullptr,
+                   std::atomic<int> *hotkeyPending = nullptr,
+                   std::string *saveSummary = nullptr);

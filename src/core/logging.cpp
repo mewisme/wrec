@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <comdef.h>
+#include <cwchar>
 #include <functional>
 #include <iostream>
 #include <sstream>
@@ -103,4 +104,26 @@ std::string wideToUtf8(const std::wstring &wide) {
   WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
                       out.data(), size, nullptr, nullptr);
   return out;
+}
+
+std::wstring utf8ToWide(const std::string &text) {
+  if (text.empty()) {
+    return {};
+  }
+  const int size = MultiByteToWideChar(
+      CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0);
+  if (size <= 0) {
+    return {};
+  }
+  std::wstring wide(static_cast<size_t>(size), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()),
+                      wide.data(), size);
+  return wide;
+}
+
+bool wideEqualsIgnoreCase(const std::wstring &a, const std::wstring &b) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  return _wcsicmp(a.c_str(), b.c_str()) == 0;
 }

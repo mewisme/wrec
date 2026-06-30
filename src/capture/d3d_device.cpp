@@ -2,8 +2,6 @@
 
 #include "logging.h"
 
-#include <algorithm>
-#include <cstring>
 #include <mutex>
 
 Status D3dDevice::initialize() {
@@ -87,52 +85,5 @@ void D3dDevice::unmapStaging() {
   std::lock_guard lock(mutex_);
   if (staging_) {
     context_->Unmap(staging_.Get(), 0);
-  }
-}
-
-void copyBgraToFixedBuffer(const MappedFrame &source,
-                           std::vector<uint8_t> &dest, uint32_t destWidth,
-                           uint32_t destHeight) {
-  dest.assign(static_cast<size_t>(destWidth) * destHeight * 4, 0);
-  const uint32_t copyWidth = (std::min)(source.width, destWidth);
-  const uint32_t copyHeight = (std::min)(source.height, destHeight);
-  for (uint32_t y = 0; y < copyHeight; ++y) {
-    const uint8_t *srcRow =
-        source.data + static_cast<size_t>(y) * source.rowPitch;
-    uint8_t *dstRow = dest.data() + static_cast<size_t>(y) * destWidth * 4;
-    std::memcpy(dstRow, srcRow, static_cast<size_t>(copyWidth) * 4);
-  }
-}
-
-void scaleBgraToFixedBuffer(const MappedFrame &source,
-                            std::vector<uint8_t> &dest, uint32_t destWidth,
-                            uint32_t destHeight) {
-  // ponytail: nearest-neighbor scale/letterbox into fixed output buffer;
-  // upgrade to bilinear if quality matters
-  dest.assign(static_cast<size_t>(destWidth) * destHeight * 4, 0);
-  if (source.width == 0 || source.height == 0) {
-    return;
-  }
-
-  const double scale =
-      (std::min)(static_cast<double>(destWidth) / source.width,
-                 static_cast<double>(destHeight) / source.height);
-  const uint32_t scaledW = static_cast<uint32_t>(source.width * scale);
-  const uint32_t scaledH = static_cast<uint32_t>(source.height * scale);
-  const uint32_t offsetX = (destWidth - scaledW) / 2;
-  const uint32_t offsetY = (destHeight - scaledH) / 2;
-
-  for (uint32_t y = 0; y < scaledH; ++y) {
-    const uint32_t srcY = static_cast<uint32_t>(y / scale);
-    const uint8_t *srcRow =
-        source.data + static_cast<size_t>(srcY) * source.rowPitch;
-    uint8_t *dstRow = dest.data() +
-                      static_cast<size_t>(offsetY + y) * destWidth * 4 +
-                      offsetX * 4;
-    for (uint32_t x = 0; x < scaledW; ++x) {
-      const uint32_t srcX = static_cast<uint32_t>(x / scale);
-      std::memcpy(dstRow + static_cast<size_t>(x) * 4,
-                  srcRow + static_cast<size_t>(srcX) * 4, 4);
-    }
   }
 }

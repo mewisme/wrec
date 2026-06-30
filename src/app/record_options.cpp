@@ -6,18 +6,10 @@
 #include <Windows.h>
 #include <shlobj.h>
 
-#include <cwchar>
 #include <iomanip>
 #include <sstream>
 
 namespace {
-
-bool equalsIgnoreCase(const std::wstring &a, const std::wstring &b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  return _wcsicmp(a.c_str(), b.c_str()) == 0;
-}
 
 bool isAbsolutePath(const std::wstring &path) {
   return (path.size() >= 2 && path[1] == L':') ||
@@ -92,19 +84,19 @@ std::wstring defaultOutputDir() {
 }
 
 Result<RecordPreset> parseRecordPreset(const std::wstring &value) {
-  if (equalsIgnoreCase(value, L"low")) {
+  if (wideEqualsIgnoreCase(value, L"low")) {
     return Result<RecordPreset>::ok(RecordPreset::Low);
   }
-  if (equalsIgnoreCase(value, L"medium")) {
+  if (wideEqualsIgnoreCase(value, L"medium")) {
     return Result<RecordPreset>::ok(RecordPreset::Medium);
   }
-  if (equalsIgnoreCase(value, L"high")) {
+  if (wideEqualsIgnoreCase(value, L"high")) {
     return Result<RecordPreset>::ok(RecordPreset::High);
   }
-  if (equalsIgnoreCase(value, L"ultra")) {
+  if (wideEqualsIgnoreCase(value, L"ultra")) {
     return Result<RecordPreset>::ok(RecordPreset::Ultra);
   }
-  if (equalsIgnoreCase(value, L"extreme")) {
+  if (wideEqualsIgnoreCase(value, L"extreme")) {
     return Result<RecordPreset>::ok(RecordPreset::Extreme);
   }
   return Result<RecordPreset>::fail(

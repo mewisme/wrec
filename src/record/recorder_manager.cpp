@@ -196,10 +196,9 @@ bool applyFocusSwitch(
 
 } // namespace
 
-Status runRecorderManager(const RecordOptions &options,
-                          std::atomic<bool> *stopRequested,
-                          std::atomic<int> *hotkeyPending,
-                          std::string *saveSummary) {
+Status runRecorder(const RecordOptions &options,
+                   std::atomic<bool> *stopRequested,
+                   std::atomic<int> *hotkeyPending, std::string *saveSummary) {
   const auto support = checkCaptureSupport();
   if (!support.isOk()) {
     return Status::fail(support.error());

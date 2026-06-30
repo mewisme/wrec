@@ -8,7 +8,6 @@
 
 #include <cstdint>
 #include <mutex>
-#include <vector>
 
 struct MappedFrame {
   const uint8_t *data = nullptr;
@@ -37,10 +36,3 @@ private:
   uint32_t stagingHeight_ = 0;
   mutable std::mutex mutex_;
 };
-
-void copyBgraToFixedBuffer(const MappedFrame &source,
-                           std::vector<uint8_t> &dest, uint32_t destWidth,
-                           uint32_t destHeight);
-void scaleBgraToFixedBuffer(const MappedFrame &source,
-                            std::vector<uint8_t> &dest, uint32_t destWidth,
-                            uint32_t destHeight);

@@ -3,27 +3,13 @@
 #include "logging.h"
 
 #include <mferror.h>
+#include <wrl/client.h>
 
 #include <cstring>
 
 namespace {
 
-template <typename T> class ComGuard {
-public:
-  ComGuard() = default;
-  explicit ComGuard(T *ptr) : ptr_(ptr) {}
-  ~ComGuard() {
-    if (ptr_) {
-      ptr_->Release();
-    }
-  }
-  T *get() const { return ptr_; }
-  T **put() { return &ptr_; }
-  T *operator->() const { return ptr_; }
-
-private:
-  T *ptr_ = nullptr;
-};
+using Microsoft::WRL::ComPtr;
 
 Status setAttributeSize(IMFMediaType *type, uint32_t width, uint32_t height) {
   const HRESULT hr = MFSetAttributeSize(type, MF_MT_FRAME_SIZE, width, height);
@@ -64,62 +50,62 @@ Status MfEncoder::open(const std::wstring &path, uint32_t width,
   height_ = height;
   fps_ = fps;
 
-  ComGuard<IMFAttributes> attrs;
-  if (FAILED(MFCreateAttributes(attrs.put(), 1))) {
+  ComPtr<IMFAttributes> attrs;
+  if (FAILED(MFCreateAttributes(&attrs, 1))) {
     return Status::fail("MFCreateAttributes failed");
   }
   attrs->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
 
-  ComGuard<IMFSinkWriter> writer;
-  const HRESULT hrWriter = MFCreateSinkWriterFromURL(path.c_str(), nullptr,
-                                                     attrs.get(), writer.put());
+  ComPtr<IMFSinkWriter> writer;
+  const HRESULT hrWriter =
+      MFCreateSinkWriterFromURL(path.c_str(), nullptr, attrs.Get(), &writer);
   if (FAILED(hrWriter)) {
     return Status::fail("MFCreateSinkWriterFromURL failed: " +
                         formatHresult(hrWriter));
   }
 
-  ComGuard<IMFMediaType> outType;
-  if (FAILED(MFCreateMediaType(outType.put()))) {
+  ComPtr<IMFMediaType> outType;
+  if (FAILED(MFCreateMediaType(&outType))) {
     return Status::fail("MFCreateMediaType failed");
   }
   outType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
   outType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-  if (auto st = setAttributeSize(outType.get(), width, height); !st.isOk()) {
+  if (auto st = setAttributeSize(outType.Get(), width, height); !st.isOk()) {
     return st;
   }
-  if (auto st = setAttributeRatio(outType.get(), MF_MT_FRAME_RATE,
+  if (auto st = setAttributeRatio(outType.Get(), MF_MT_FRAME_RATE,
                                   static_cast<uint32_t>(fps), 1);
       !st.isOk()) {
     return st;
   }
   if (auto st =
-          setAttributeRatio(outType.get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+          setAttributeRatio(outType.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
       !st.isOk()) {
     return st;
   }
   outType->SetUINT32(MF_MT_AVG_BITRATE, static_cast<UINT32>(bitrate));
   outType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 
-  const HRESULT hrOut = writer->AddStream(outType.get(), &streamIndex_);
+  const HRESULT hrOut = writer->AddStream(outType.Get(), &streamIndex_);
   if (FAILED(hrOut)) {
     return Status::fail("AddStream(output) failed: " + formatHresult(hrOut));
   }
 
-  ComGuard<IMFMediaType> inType;
-  if (FAILED(MFCreateMediaType(inType.put()))) {
+  ComPtr<IMFMediaType> inType;
+  if (FAILED(MFCreateMediaType(&inType))) {
     return Status::fail("MFCreateMediaType failed");
   }
   inType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
   inType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
-  if (auto st = setAttributeSize(inType.get(), width, height); !st.isOk()) {
+  if (auto st = setAttributeSize(inType.Get(), width, height); !st.isOk()) {
     return st;
   }
-  if (auto st = setAttributeRatio(inType.get(), MF_MT_FRAME_RATE,
+  if (auto st = setAttributeRatio(inType.Get(), MF_MT_FRAME_RATE,
                                   static_cast<uint32_t>(fps), 1);
       !st.isOk()) {
     return st;
   }
-  if (auto st = setAttributeRatio(inType.get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+  if (auto st = setAttributeRatio(inType.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
       !st.isOk()) {
     return st;
   }
@@ -127,7 +113,7 @@ Status MfEncoder::open(const std::wstring &path, uint32_t width,
   inType->SetUINT32(MF_MT_DEFAULT_STRIDE, static_cast<UINT32>(width * 4));
 
   const HRESULT hrIn =
-      writer->SetInputMediaType(streamIndex_, inType.get(), nullptr);
+      writer->SetInputMediaType(streamIndex_, inType.Get(), nullptr);
   if (FAILED(hrIn)) {
     return Status::fail("SetInputMediaType failed: " + formatHresult(hrIn));
   }
@@ -137,8 +123,7 @@ Status MfEncoder::open(const std::wstring &path, uint32_t width,
     return Status::fail("BeginWriting failed: " + formatHresult(hrBegin));
   }
 
-  writer_ = writer.get();
-  writer.get()->AddRef();
+  writer_ = writer;
   opened_ = true;
   return Status::ok();
 }
@@ -152,9 +137,9 @@ Status MfEncoder::writeFrame(const std::vector<uint8_t> &bgra,
   // ponytail: MFCreateMemoryBuffer + MFCreateSample every frame; reuse needs
   // verified WriteSample copy semantics (may retain sample async) — defer pass
   // 2
-  ComGuard<IMFMediaBuffer> buffer;
+  ComPtr<IMFMediaBuffer> buffer;
   const DWORD bufferSize = static_cast<DWORD>(width_ * height_ * 4);
-  const HRESULT hrBuf = MFCreateMemoryBuffer(bufferSize, buffer.put());
+  const HRESULT hrBuf = MFCreateMemoryBuffer(bufferSize, &buffer);
   if (FAILED(hrBuf)) {
     return Status::fail("MFCreateMemoryBuffer failed: " + formatHresult(hrBuf));
   }
@@ -167,18 +152,18 @@ Status MfEncoder::writeFrame(const std::vector<uint8_t> &bgra,
   buffer->Unlock();
   buffer->SetCurrentLength(bufferSize);
 
-  ComGuard<IMFSample> sample;
-  if (FAILED(MFCreateSample(sample.put()))) {
+  ComPtr<IMFSample> sample;
+  if (FAILED(MFCreateSample(&sample))) {
     return Status::fail("MFCreateSample failed");
   }
-  sample->AddBuffer(buffer.get());
+  sample->AddBuffer(buffer.Get());
 
   // Wall-clock timestamps keep playback speed correct when frames are dropped
   const LONGLONG duration = 10000000LL / fps_;
   sample->SetSampleTime(timestamp100ns);
   sample->SetSampleDuration(duration);
 
-  const HRESULT hrWrite = writer_->WriteSample(streamIndex_, sample.get());
+  const HRESULT hrWrite = writer_->WriteSample(streamIndex_, sample.Get());
   if (FAILED(hrWrite)) {
     return Status::fail("WriteSample failed: " + formatHresult(hrWrite));
   }
@@ -190,8 +175,7 @@ Status MfEncoder::finalize() {
     return Status::ok();
   }
   const HRESULT hr = writer_->Finalize();
-  writer_->Release();
-  writer_ = nullptr;
+  writer_.Reset();
   opened_ = false;
   if (FAILED(hr)) {
     return Status::fail("Finalize failed: " + formatHresult(hr));

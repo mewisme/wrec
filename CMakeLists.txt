@@ -46,7 +46,6 @@ add_executable(wrec
     src/record/hotkeys.cpp
     src/record/frame_synchronizer.cpp
     src/record/recorder_manager.cpp
-    src/record/recorder.cpp
     src/record/mf_encoder.cpp
     src/record/post_compress.cpp
 )

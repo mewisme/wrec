@@ -4,7 +4,7 @@
 #include "logging.h"
 #include "path_install.h"
 #include "record_options.h"
-#include "recorder.h"
+#include "recorder_manager.h"
 #include "scene.h"
 #include "window_list.h"
 
@@ -21,13 +21,6 @@
 
 namespace {
 
-bool equalsIgnoreCase(const std::wstring &a, const std::wstring &b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  return _wcsicmp(a.c_str(), b.c_str()) == 0;
-}
-
 bool isFlag(const std::wstring &arg, const wchar_t *longForm,
             wchar_t shortForm) {
   if (arg == longForm) {
@@ -37,11 +30,11 @@ bool isFlag(const std::wstring &arg, const wchar_t *longForm,
 }
 
 bool parseOnOff(const std::wstring &value, bool &out) {
-  if (equalsIgnoreCase(value, L"on")) {
+  if (wideEqualsIgnoreCase(value, L"on")) {
     out = true;
     return true;
   }
-  if (equalsIgnoreCase(value, L"off")) {
+  if (wideEqualsIgnoreCase(value, L"off")) {
     out = false;
     return true;
   }
@@ -105,21 +98,21 @@ Result<CustomSourceSpec> parseCustomSourceSpec(const std::wstring &text) {
     }
     const std::wstring key = token.substr(0, eq);
     const std::wstring value = token.substr(eq + 1);
-    if (equalsIgnoreCase(key, L"hwnd")) {
+    if (wideEqualsIgnoreCase(key, L"hwnd")) {
       spec.hwnd = parseU64(value);
-    } else if (equalsIgnoreCase(key, L"pid")) {
+    } else if (wideEqualsIgnoreCase(key, L"pid")) {
       spec.pid = parseU32(value);
-    } else if (equalsIgnoreCase(key, L"title")) {
+    } else if (wideEqualsIgnoreCase(key, L"title")) {
       spec.title = value;
-    } else if (equalsIgnoreCase(key, L"x")) {
+    } else if (wideEqualsIgnoreCase(key, L"x")) {
       spec.x = parseInt(value);
-    } else if (equalsIgnoreCase(key, L"y")) {
+    } else if (wideEqualsIgnoreCase(key, L"y")) {
       spec.y = parseInt(value);
-    } else if (equalsIgnoreCase(key, L"w")) {
+    } else if (wideEqualsIgnoreCase(key, L"w")) {
       spec.w = parseInt(value);
-    } else if (equalsIgnoreCase(key, L"h")) {
+    } else if (wideEqualsIgnoreCase(key, L"h")) {
       spec.h = parseInt(value);
-    } else if (equalsIgnoreCase(key, L"scale")) {
+    } else if (wideEqualsIgnoreCase(key, L"scale")) {
       const auto mode = parseScaleModeStrict(value);
       if (!mode.isOk()) {
         return Result<CustomSourceSpec>::fail(mode.error());
@@ -239,7 +232,7 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
         }
       } else if (arg == L"--audio") {
         const std::wstring audio = requireValue(i, argc, argv, "--audio");
-        if (!equalsIgnoreCase(audio, L"none")) {
+        if (!wideEqualsIgnoreCase(audio, L"none")) {
           return Result<ParsedCommand>::fail(
               "--audio only supports none for now");
         }

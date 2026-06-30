@@ -11,20 +11,103 @@ namespace {
 
 void fillSolid(std::vector<uint8_t> &output, uint32_t canvasW, uint32_t canvasH,
                uint32_t argb) {
-  const size_t pixels = static_cast<size_t>(canvasW) * canvasH;
-  if (output.size() != pixels * 4) {
-    output.assign(pixels * 4, 0);
+  const size_t rowBytes = static_cast<size_t>(canvasW) * 4;
+  const size_t bytes = rowBytes * canvasH;
+  if (output.size() != bytes) {
+    output.assign(bytes, 0);
   }
   const uint8_t b = static_cast<uint8_t>(argb & 0xFF);
   const uint8_t g = static_cast<uint8_t>((argb >> 8) & 0xFF);
   const uint8_t r = static_cast<uint8_t>((argb >> 16) & 0xFF);
   const uint8_t a = static_cast<uint8_t>((argb >> 24) & 0xFF);
-  for (size_t i = 0; i < pixels; ++i) {
-    uint8_t *px = output.data() + i * 4;
-    px[0] = b;
-    px[1] = g;
-    px[2] = r;
-    px[3] = a;
+  uint8_t *row = output.data();
+  row[0] = b;
+  row[1] = g;
+  row[2] = r;
+  row[3] = a;
+  for (uint32_t y = 1; y < canvasH; ++y) {
+    std::memcpy(output.data() + static_cast<size_t>(y) * rowBytes, row,
+                rowBytes);
+  }
+}
+
+struct ClosedLabelCache {
+  std::vector<uint8_t> pixels;
+  int width = 0;
+  int height = 0;
+};
+
+const ClosedLabelCache &closedLabelCache() {
+  static const ClosedLabelCache cache = [] {
+    ClosedLabelCache result{};
+    constexpr int kW = 200;
+    constexpr int kH = 48;
+    HDC screen = GetDC(nullptr);
+    if (!screen) {
+      return result;
+    }
+    HDC mem = CreateCompatibleDC(screen);
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = kW;
+    bi.bmiHeader.biHeight = -kH;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void *bits = nullptr;
+    HBITMAP dib = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!dib) {
+      DeleteDC(mem);
+      ReleaseDC(nullptr, screen);
+      return result;
+    }
+    HGDIOBJ old = SelectObject(mem, dib);
+    HBRUSH bg = CreateSolidBrush(RGB(0x40, 0x40, 0x40));
+    RECT fill{0, 0, kW, kH};
+    FillRect(mem, &fill, bg);
+    DeleteObject(bg);
+    SetBkMode(mem, TRANSPARENT);
+    SetTextColor(mem, RGB(255, 255, 255));
+    HFONT font = CreateFontW(-MulDiv(14, GetDpiForSystem(), 96), 0, 0, 0,
+                             FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                             CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    HGDIOBJ oldFont = SelectObject(mem, font);
+    DrawTextW(mem, L"Window Closed", -1, &fill,
+              DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(mem, oldFont);
+    DeleteObject(font);
+    SelectObject(mem, old);
+    if (bits) {
+      result.width = kW;
+      result.height = kH;
+      result.pixels.assign(static_cast<size_t>(kW) * kH * 4, 0);
+      std::memcpy(result.pixels.data(), bits, result.pixels.size());
+    }
+    DeleteObject(dib);
+    DeleteDC(mem);
+    ReleaseDC(nullptr, screen);
+    return result;
+  }();
+  return cache;
+}
+
+void fillRectGray(std::vector<uint8_t> &output, uint32_t canvasW, int x, int y,
+                  int w, int h) {
+  const uint8_t gray[] = {0x40, 0x40, 0x40, 0xFF};
+  const size_t rowBytes = static_cast<size_t>(canvasW) * 4;
+  for (int py = y; py < y + h; ++py) {
+    if (py < 0) {
+      continue;
+    }
+    uint8_t *row = output.data() + static_cast<size_t>(py) * rowBytes +
+                   static_cast<size_t>(x) * 4;
+    for (int px = 0; px < w; ++px) {
+      if (x + px < 0) {
+        continue;
+      }
+      std::memcpy(row + static_cast<size_t>(px) * 4, gray, 4);
+    }
   }
 }
 
@@ -194,85 +277,37 @@ void SceneCompositor::blitSource(const SourceFrameView &frame, ScaleMode mode,
 void SceneCompositor::drawPlaceholder(std::vector<uint8_t> &output,
                                       uint32_t canvasW, uint32_t canvasH, int x,
                                       int y, int w, int h) {
-  const uint8_t gray[] = {0x40, 0x40, 0x40, 0xFF};
-  for (int py = y; py < y + h && py < static_cast<int>(canvasH); ++py) {
-    if (py < 0) {
+  fillRectGray(output, canvasW, x, y, w, h);
+
+  const ClosedLabelCache &label = closedLabelCache();
+  if (label.pixels.empty() || label.width <= 0 || label.height <= 0) {
+    return;
+  }
+
+  const int offsetX = x + (w - label.width) / 2;
+  const int offsetY = y + (h - label.height) / 2;
+  const auto *src = label.pixels.data();
+  for (int py = 0; py < label.height; ++py) {
+    const int dstY = offsetY + py;
+    if (dstY < 0 || dstY >= static_cast<int>(canvasH)) {
       continue;
     }
-    for (int px = x; px < x + w && px < static_cast<int>(canvasW); ++px) {
-      if (px < 0) {
+    for (int px = 0; px < label.width; ++px) {
+      const int dstX = offsetX + px;
+      if (dstX < 0 || dstX >= static_cast<int>(canvasW)) {
         continue;
       }
-      std::memcpy(
-          output.data() +
-              (static_cast<size_t>(py) * canvasW + static_cast<size_t>(px)) * 4,
-          gray, 4);
-    }
-  }
-
-  HDC screen = GetDC(nullptr);
-  if (!screen) {
-    return;
-  }
-  HDC mem = CreateCompatibleDC(screen);
-  BITMAPINFO bi{};
-  bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-  bi.bmiHeader.biWidth = w;
-  bi.bmiHeader.biHeight = -h;
-  bi.bmiHeader.biPlanes = 1;
-  bi.bmiHeader.biBitCount = 32;
-  bi.bmiHeader.biCompression = BI_RGB;
-  void *bits = nullptr;
-  HBITMAP dib = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
-  if (!dib) {
-    DeleteDC(mem);
-    ReleaseDC(nullptr, screen);
-    return;
-  }
-  HGDIOBJ old = SelectObject(mem, dib);
-  HBRUSH bg = CreateSolidBrush(RGB(0x40, 0x40, 0x40));
-  RECT fill{0, 0, w, h};
-  FillRect(mem, &fill, bg);
-  DeleteObject(bg);
-  SetBkMode(mem, TRANSPARENT);
-  SetTextColor(mem, RGB(255, 255, 255));
-  HFONT font = CreateFontW(-MulDiv(14, GetDpiForSystem(), 96), 0, 0, 0,
-                           FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                           OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                           CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-  HGDIOBJ oldFont = SelectObject(mem, font);
-  DrawTextW(mem, L"Window Closed", -1, &fill,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-  SelectObject(mem, oldFont);
-  DeleteObject(font);
-  SelectObject(mem, old);
-
-  if (bits) {
-    const auto *src = static_cast<const uint8_t *>(bits);
-    for (int py = 0; py < h; ++py) {
-      const int dstY = y + py;
-      if (dstY < 0 || dstY >= static_cast<int>(canvasH)) {
+      const uint8_t *sp =
+          src + (static_cast<size_t>(py) * label.width + px) * 4;
+      if (sp[3] == 0) {
         continue;
       }
-      for (int px = 0; px < w; ++px) {
-        const int dstX = x + px;
-        if (dstX < 0 || dstX >= static_cast<int>(canvasW)) {
-          continue;
-        }
-        const uint8_t *sp = src + (static_cast<size_t>(py) * w + px) * 4;
-        if (sp[3] == 0) {
-          continue;
-        }
-        std::memcpy(output.data() + (static_cast<size_t>(dstY) * canvasW +
-                                     static_cast<size_t>(dstX)) *
-                                        4,
-                    sp, 4);
-      }
+      std::memcpy(output.data() + (static_cast<size_t>(dstY) * canvasW +
+                                   static_cast<size_t>(dstX)) *
+                                      4,
+                  sp, 4);
     }
   }
-  DeleteObject(dib);
-  DeleteDC(mem);
-  ReleaseDC(nullptr, screen);
 }
 
 void SceneCompositor::compose(const Scene &scene,

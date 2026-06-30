@@ -3,7 +3,6 @@
 #include <functional>
 #include <string>
 
-
 enum class LogLevel { Info, Verbose, Error };
 
 using LogGuiSink =
@@ -24,3 +23,5 @@ void logJsonEvent(const std::string &event,
 
 std::string formatHresult(long hr);
 std::string wideToUtf8(const std::wstring &wide);
+std::wstring utf8ToWide(const std::string &text);
+bool wideEqualsIgnoreCase(const std::wstring &a, const std::wstring &b);

@@ -6,6 +6,7 @@
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
+#include <wrl/client.h>
 
 #include <cstdint>
 #include <string>
@@ -33,7 +34,7 @@ public:
   Status finalize();
 
 private:
-  IMFSinkWriter *writer_ = nullptr;
+  Microsoft::WRL::ComPtr<IMFSinkWriter> writer_;
   DWORD streamIndex_ = 0;
   int fps_ = 60;
   uint32_t width_ = 0;

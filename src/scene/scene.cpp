@@ -6,16 +6,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cwchar>
 
 namespace {
-
-bool equalsIgnoreCase(const std::wstring &a, const std::wstring &b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  return _wcsicmp(a.c_str(), b.c_str()) == 0;
-}
 
 uint32_t evenDown(uint32_t v) { return v & ~1u; }
 
@@ -75,13 +67,13 @@ void applyFallbackDims(std::vector<SourceDimensions> &dims,
 } // namespace
 
 Result<ScaleMode> parseScaleModeStrict(const std::wstring &text) {
-  if (equalsIgnoreCase(text, L"fit")) {
+  if (wideEqualsIgnoreCase(text, L"fit")) {
     return Result<ScaleMode>::ok(ScaleMode::Fit);
   }
-  if (equalsIgnoreCase(text, L"fill")) {
+  if (wideEqualsIgnoreCase(text, L"fill")) {
     return Result<ScaleMode>::ok(ScaleMode::Fill);
   }
-  if (equalsIgnoreCase(text, L"stretch")) {
+  if (wideEqualsIgnoreCase(text, L"stretch")) {
     return Result<ScaleMode>::ok(ScaleMode::Stretch);
   }
   return Result<ScaleMode>::fail("scale must be fit, fill, or stretch");
@@ -100,22 +92,22 @@ const char *scaleModeName(ScaleMode mode) {
 }
 
 Result<LayoutKind> parseLayoutKind(const std::wstring &text) {
-  if (equalsIgnoreCase(text, L"auto")) {
+  if (wideEqualsIgnoreCase(text, L"auto")) {
     return Result<LayoutKind>::ok(LayoutKind::Auto);
   }
-  if (equalsIgnoreCase(text, L"grid")) {
+  if (wideEqualsIgnoreCase(text, L"grid")) {
     return Result<LayoutKind>::ok(LayoutKind::Grid);
   }
-  if (equalsIgnoreCase(text, L"horizontal")) {
+  if (wideEqualsIgnoreCase(text, L"horizontal")) {
     return Result<LayoutKind>::ok(LayoutKind::Horizontal);
   }
-  if (equalsIgnoreCase(text, L"vertical")) {
+  if (wideEqualsIgnoreCase(text, L"vertical")) {
     return Result<LayoutKind>::ok(LayoutKind::Vertical);
   }
-  if (equalsIgnoreCase(text, L"focus")) {
+  if (wideEqualsIgnoreCase(text, L"focus")) {
     return Result<LayoutKind>::ok(LayoutKind::Focus);
   }
-  if (equalsIgnoreCase(text, L"custom")) {
+  if (wideEqualsIgnoreCase(text, L"custom")) {
     return Result<LayoutKind>::ok(LayoutKind::Custom);
   }
   return Result<LayoutKind>::fail(

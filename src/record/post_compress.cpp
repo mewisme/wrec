@@ -11,13 +11,6 @@
 
 namespace {
 
-bool equalsIgnoreCase(const std::wstring &a, const std::wstring &b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  return _wcsicmp(a.c_str(), b.c_str()) == 0;
-}
-
 std::wstring quoteArg(const std::wstring &arg) {
   std::wstring out;
   out.push_back(L'"');
@@ -104,16 +97,16 @@ void deleteFileQuiet(const std::wstring &path) {
 } // namespace
 
 Result<CompressLevel> parseCompressLevel(const std::wstring &value) {
-  if (equalsIgnoreCase(value, L"off")) {
+  if (wideEqualsIgnoreCase(value, L"off")) {
     return Result<CompressLevel>::ok(CompressLevel::Off);
   }
-  if (equalsIgnoreCase(value, L"small")) {
+  if (wideEqualsIgnoreCase(value, L"small")) {
     return Result<CompressLevel>::ok(CompressLevel::Small);
   }
-  if (equalsIgnoreCase(value, L"medium")) {
+  if (wideEqualsIgnoreCase(value, L"medium")) {
     return Result<CompressLevel>::ok(CompressLevel::Medium);
   }
-  if (equalsIgnoreCase(value, L"aggressive")) {
+  if (wideEqualsIgnoreCase(value, L"aggressive")) {
     return Result<CompressLevel>::ok(CompressLevel::Aggressive);
   }
   return Result<CompressLevel>::fail(
