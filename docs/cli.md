@@ -3,6 +3,7 @@
 ## Commands
 
 ```text
+wrec [gui]              Open GUI (default when no subcommand)
 wrec list|l [options]
 wrec record|rec|r (-w <HWND> | -p <PID> | -t <title> | -S <spec>) [options]
 wrec gui
@@ -55,6 +56,7 @@ wrec r -w 0x1050E                      # HWND from list
 wrec r -t Chrome -t "Visual Studio Code" -o session.mp4
 wrec r -p 1234 -p 4567 --layout horizontal -o dual.mp4
 wrec r -w 0x123456 -w 0xABCDEF --layout grid -o grid.mp4
+wrec r -t Chrome -t Notepad --layout focus -o focus.mp4
 ```
 
 ### Custom layout
@@ -88,6 +90,7 @@ wrec r -t "Notepad" -d D:\captures     # auto name in folder
 | `grid` | Even grid; cell size from largest source (or even split when `--canvas` is set) |
 | `horizontal` | Side by side |
 | `vertical` | Stacked |
+| `focus` | One target at a time; switches when a selected target becomes the foreground window |
 | `custom` | Explicit `--source` placements; **requires `--canvas`** |
 
 ---
@@ -119,7 +122,7 @@ Short flags are only available for targets, output paths, verbose, and custom so
 | `-d` | `--output-dir` | `%USERPROFILE%\Videos` | Folder for `-o` or auto-named file |
 | `-v` | `--verbose` | off | Verbose logging |
 | `-S` | `--source` | — | Custom placement spec (repeatable) |
-| — | `--layout` | auto | `auto`, `grid`, `horizontal`, `vertical`, `custom` |
+| — | `--layout` | auto | `auto`, `grid`, `horizontal`, `vertical`, `focus`, `custom` |
 | — | `--canvas` | auto | Canvas size `WxH` (required for custom layout) |
 | — | `--preset` | medium | `low` … `extreme` |
 | — | `--fps` | preset | Frame rate |

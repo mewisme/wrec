@@ -7,7 +7,7 @@
 #include <vector>
 
 enum class ScaleMode { Fit, Fill, Stretch };
-enum class LayoutKind { Auto, Grid, Horizontal, Vertical, Custom };
+enum class LayoutKind { Auto, Grid, Horizontal, Vertical, Focus, Custom };
 
 struct CustomSourceSpec {
   unsigned long long hwnd = 0;
@@ -44,11 +44,14 @@ struct SourceDimensions {
 };
 
 struct RecordOptions;
+struct WindowInfo;
 
 Result<ScaleMode> parseScaleModeStrict(const std::wstring &text);
 const char *scaleModeName(ScaleMode mode);
 Result<LayoutKind> parseLayoutKind(const std::wstring &text);
 const char *layoutKindName(LayoutKind kind);
 
-Result<Scene> buildSceneFromOptions(const RecordOptions &options,
-                                    const std::vector<SourceDimensions> &dims);
+Result<Scene>
+buildSceneFromOptions(const RecordOptions &options,
+                      const std::vector<SourceDimensions> &dims,
+                      const std::vector<WindowInfo> *resolvedTargets = nullptr);

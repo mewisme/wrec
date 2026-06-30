@@ -10,4 +10,5 @@ struct SourceFrameView {
   uint32_t width = 0;
   uint32_t height = 0;
   uint32_t rowPitch = 0;
+  uint64_t generation = 0;
 };

@@ -7,7 +7,6 @@
 #include <Psapi.h>
 #include <Windows.h>
 
-
 #include <algorithm>
 #include <cwctype>
 #include <iomanip>
@@ -362,4 +361,31 @@ Result<WindowInfo> resolveTargetWindow(const RecordOptions &options) {
         "Specify exactly one target, or use resolveTargetWindows for multiple");
   }
   return Result<WindowInfo>::ok(many.value().front());
+}
+
+bool hwndMatchesTarget(HWND hwnd, HWND target) {
+  if (!hwnd || !target) {
+    return false;
+  }
+  // ponytail: parent-walk only; upgrade to GetAncestor(GA_ROOT) if owners
+  // differ
+  for (HWND walk = hwnd; walk != nullptr; walk = GetParent(walk)) {
+    if (walk == target) {
+      return true;
+    }
+  }
+  return false;
+}
+
+size_t indexOfMatchingTarget(HWND hwnd,
+                             const std::vector<WindowInfo> &targets) {
+  if (!hwnd) {
+    return targets.size();
+  }
+  for (size_t i = 0; i < targets.size(); ++i) {
+    if (hwndMatchesTarget(hwnd, targets[i].hwnd)) {
+      return i;
+    }
+  }
+  return targets.size();
 }

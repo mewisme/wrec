@@ -66,7 +66,13 @@ Or use: .\build.ps1 -Generator VisualStudio
 
 $cmake = Find-CMake
 $vsDevCmd = Join-Path (Find-VsInstallPath) 'Common7\Tools\VsDevCmd.bat'
-$versionArg = if ($Version) { " -DWREC_VERSION=$Version" } else { ' -UWREC_VERSION' }
+if (-not $Version) {
+  $sha = git -C $Root rev-parse --short HEAD 2>$null
+  if (-not $sha) { $sha = 'local' }
+  $stamp = Get-Date -Format 'HHmmss'
+  $Version = "1.0.0-dev.$stamp+$sha"
+}
+$versionArg = " -DWREC_VERSION:STRING=$Version"
 
 if ($Generator -eq 'Ninja') {
   $buildDir = Join-Path $Root 'build'
@@ -96,6 +102,7 @@ else {
 }
 
 Write-Host "Generator: $Generator" -ForegroundColor Cyan
+Write-Host "Version:   $Version" -ForegroundColor Cyan
 Write-Host "Build dir: $buildDir" -ForegroundColor Cyan
 
 cmd /c "`"$vsDevCmd`" -arch=amd64 -host_arch=amd64 && cd /d `"$Root`" && $configure && $build"

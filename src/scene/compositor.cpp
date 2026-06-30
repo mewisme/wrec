@@ -28,6 +28,67 @@ void fillSolid(std::vector<uint8_t> &output, uint32_t canvasW, uint32_t canvasH,
   }
 }
 
+void blitTile1to1(const SourceFrameView &frame, std::vector<uint8_t> &output,
+                  uint32_t canvasW, int destX, int destY, int destW,
+                  int destH) {
+  for (int y = 0; y < destH; ++y) {
+    const int dstY = destY + y;
+    if (dstY < 0) {
+      continue;
+    }
+    const uint8_t *srcRow =
+        frame.data + static_cast<size_t>(y) * frame.rowPitch;
+    std::memcpy(output.data() + (static_cast<size_t>(dstY) * canvasW +
+                                 static_cast<size_t>(destX)) *
+                                    4,
+                srcRow, static_cast<size_t>(destW) * 4);
+  }
+}
+
+bool tryComposeTile1to1(const Scene &scene,
+                        const std::vector<SourceFrameView> &frames,
+                        std::vector<uint8_t> &output) {
+  if (scene.sources.empty()) {
+    return false;
+  }
+
+  size_t coveredPixels = 0;
+  for (const SceneSource &src : scene.sources) {
+    if (src.captureIndex >= frames.size()) {
+      return false;
+    }
+    const SourceFrameView &frame = frames[src.captureIndex];
+    if (frame.state != SourceState::Active || frame.data == nullptr) {
+      return false;
+    }
+    if (src.scale != ScaleMode::Stretch || src.w <= 0 || src.h <= 0) {
+      return false;
+    }
+    if (frame.width != static_cast<uint32_t>(src.w) ||
+        frame.height != static_cast<uint32_t>(src.h)) {
+      return false;
+    }
+    coveredPixels += static_cast<size_t>(src.w) * static_cast<size_t>(src.h);
+  }
+
+  const size_t canvasPixels =
+      static_cast<size_t>(scene.canvasWidth) * scene.canvasHeight;
+  if (coveredPixels != canvasPixels) {
+    return false;
+  }
+
+  const size_t bytes = canvasPixels * 4;
+  if (output.size() != bytes) {
+    output.resize(bytes);
+  }
+
+  for (const SceneSource &src : scene.sources) {
+    const SourceFrameView &frame = frames[src.captureIndex];
+    blitTile1to1(frame, output, scene.canvasWidth, src.x, src.y, src.w, src.h);
+  }
+  return true;
+}
+
 } // namespace
 
 BlitRect computeBlitRect(uint32_t srcW, uint32_t srcH, int destW, int destH,
@@ -83,6 +144,26 @@ void SceneCompositor::blitSource(const SourceFrameView &frame, ScaleMode mode,
 
   const BlitRect blit =
       computeBlitRect(frame.width, frame.height, destW, destH, mode);
+
+  if (blit.scaleX == 1.0 && blit.scaleY == 1.0 && blit.offsetX == 0 &&
+      blit.offsetY == 0 && blit.width == destW && blit.height == destH &&
+      static_cast<uint32_t>(destW) == frame.width &&
+      static_cast<uint32_t>(destH) == frame.height) {
+    for (int y = 0; y < destH; ++y) {
+      const int dstY = destY + y;
+      if (dstY < 0 || dstY >= static_cast<int>(canvasH)) {
+        continue;
+      }
+      const uint8_t *srcRow =
+          frame.data + static_cast<size_t>(y) * frame.rowPitch;
+      std::memcpy(output.data() + (static_cast<size_t>(dstY) * canvasW +
+                                   static_cast<size_t>(destX)) *
+                                      4,
+                  srcRow, static_cast<size_t>(destW) * 4);
+    }
+    return;
+  }
+
   const double scale = blit.scaleX;
 
   // ponytail: nearest-neighbor blit; upgrade to bilinear if quality matters
@@ -199,6 +280,30 @@ void SceneCompositor::compose(const Scene &scene,
                               std::vector<uint8_t> &output) {
   const uint32_t canvasW = scene.canvasWidth;
   const uint32_t canvasH = scene.canvasHeight;
+
+  if (tryComposeTile1to1(scene, frames, output)) {
+    return;
+  }
+
+  if (scene.sources.size() == 1) {
+    const SceneSource &src = scene.sources[0];
+    if (src.captureIndex < frames.size()) {
+      const SourceFrameView &frame = frames[src.captureIndex];
+      if (frame.state == SourceState::Active && frame.data != nullptr &&
+          src.x == 0 && src.y == 0 && src.w == static_cast<int>(canvasW) &&
+          src.h == static_cast<int>(canvasH) &&
+          src.scale == ScaleMode::Stretch && frame.width == canvasW &&
+          frame.height == canvasH) {
+        const size_t bytes = static_cast<size_t>(canvasW) * canvasH * 4;
+        if (output.size() != bytes) {
+          output.resize(bytes);
+        }
+        std::memcpy(output.data(), frame.data, bytes);
+        return;
+      }
+    }
+  }
+
   fillSolid(output, canvasW, canvasH, scene.backgroundArgb);
 
   for (const SceneSource &src : scene.sources) {

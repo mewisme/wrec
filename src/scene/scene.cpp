@@ -112,11 +112,14 @@ Result<LayoutKind> parseLayoutKind(const std::wstring &text) {
   if (equalsIgnoreCase(text, L"vertical")) {
     return Result<LayoutKind>::ok(LayoutKind::Vertical);
   }
+  if (equalsIgnoreCase(text, L"focus")) {
+    return Result<LayoutKind>::ok(LayoutKind::Focus);
+  }
   if (equalsIgnoreCase(text, L"custom")) {
     return Result<LayoutKind>::ok(LayoutKind::Custom);
   }
   return Result<LayoutKind>::fail(
-      "layout must be auto, grid, horizontal, vertical, or custom");
+      "layout must be auto, grid, horizontal, vertical, focus, or custom");
 }
 
 const char *layoutKindName(LayoutKind kind) {
@@ -127,6 +130,8 @@ const char *layoutKindName(LayoutKind kind) {
     return "horizontal";
   case LayoutKind::Vertical:
     return "vertical";
+  case LayoutKind::Focus:
+    return "focus";
   case LayoutKind::Custom:
     return "custom";
   case LayoutKind::Auto:
@@ -137,15 +142,20 @@ const char *layoutKindName(LayoutKind kind) {
 
 Result<Scene>
 buildSceneFromOptions(const RecordOptions &options,
-                      const std::vector<SourceDimensions> &dimsIn) {
+                      const std::vector<SourceDimensions> &dimsIn,
+                      const std::vector<WindowInfo> *resolvedTargets) {
   if (dimsIn.empty()) {
     return Result<Scene>::fail("No capture sources");
   }
 
   std::vector<SourceDimensions> dims = dimsIn;
-  const auto targetsResult = resolveTargetWindows(options);
-  if (targetsResult.isOk()) {
-    applyFallbackDims(dims, targetsResult.value());
+  if (resolvedTargets != nullptr) {
+    applyFallbackDims(dims, *resolvedTargets);
+  } else {
+    const auto targetsResult = resolveTargetWindows(options);
+    if (targetsResult.isOk()) {
+      applyFallbackDims(dims, targetsResult.value());
+    }
   }
 
   Scene scene{};
@@ -176,6 +186,28 @@ buildSceneFromOptions(const RecordOptions &options,
       src.scale = spec.scale;
       scene.sources.push_back(src);
     }
+    return Result<Scene>::ok(std::move(scene));
+  }
+
+  if (scene.layout == LayoutKind::Focus) {
+    if (explicitCanvas) {
+      scene.canvasWidth = evenDown(options.canvasWidth);
+      scene.canvasHeight = evenDown(options.canvasHeight);
+    } else {
+      scene.canvasWidth = evenDown(maxSourceWidth(dims));
+      scene.canvasHeight = evenDown(maxSourceHeight(dims));
+    }
+    if (scene.canvasWidth == 0 || scene.canvasHeight == 0) {
+      return Result<Scene>::fail("Invalid canvas dimensions");
+    }
+    SceneSource src{};
+    src.captureIndex = 0;
+    src.x = 0;
+    src.y = 0;
+    src.w = static_cast<int>(scene.canvasWidth);
+    src.h = static_cast<int>(scene.canvasHeight);
+    src.scale = options.scale;
+    scene.sources.push_back(src);
     return Result<Scene>::ok(std::move(scene));
   }
 

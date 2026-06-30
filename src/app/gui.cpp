@@ -3,6 +3,7 @@
 #include "cli.h"
 #include "hotkeys.h"
 #include "logging.h"
+#include "notification.h"
 #include "path_install.h"
 #include "record_options.h"
 #include "recorder.h"
@@ -39,6 +40,16 @@ int guiPx(int value, int dpi) { return MulDiv(value, dpi, 96); }
 
 constexpr UINT WM_APP_LOG = WM_APP + 1;
 constexpr UINT WM_APP_RECORD_DONE = WM_APP + 2;
+constexpr UINT WM_TRAYICON = WM_APP + 10;
+
+enum TrayMenuId : int {
+  TRAY_TOGGLE_GUI = 2001,
+  TRAY_TOGGLE_CONSOLE,
+  TRAY_START_STOP,
+  TRAY_PAUSE_RESUME,
+  TRAY_OPEN_FOLDER,
+  TRAY_EXIT,
+};
 
 enum ControlId : int {
   IDC_LIST = 1001,
@@ -82,7 +93,9 @@ struct GuiState {
   std::atomic<bool> recording{false};
   std::atomic<int> pendingHotkey{static_cast<int>(HotkeyAction::None)};
   bool guiHotkeysRegistered = false;
-  bool closePending = false;
+  bool allowExit = false;
+  bool exitPending = false;
+  bool trayNoticeShown = false;
   std::wstring lastRecordedPath;
   bool fpsUserEdited = false;
   bool bitrateUserEdited = false;
@@ -90,6 +103,7 @@ struct GuiState {
 };
 
 GuiState *g_state = nullptr;
+UINT g_wmTaskbarCreated = 0;
 
 std::wstring utf8ToWide(const std::string &text) {
   if (text.empty()) {
@@ -420,10 +434,10 @@ void openRecentVideo(HWND hwnd) {
 }
 
 LayoutKind layoutKindFromIndex(int index) {
-  static const LayoutKind kLayouts[] = {LayoutKind::Auto, LayoutKind::Grid,
-                                        LayoutKind::Horizontal,
-                                        LayoutKind::Vertical};
-  if (index < 0 || index >= 4) {
+  static const LayoutKind kLayouts[] = {
+      LayoutKind::Auto, LayoutKind::Grid, LayoutKind::Horizontal,
+      LayoutKind::Vertical, LayoutKind::Focus};
+  if (index < 0 || index >= 5) {
     return LayoutKind::Auto;
   }
   return kLayouts[index];
@@ -514,12 +528,96 @@ Result<RecordOptions> buildRecordOptions(HWND hwnd) {
   return Result<RecordOptions>::ok(std::move(options));
 }
 
-void requestStopAndSave(bool closeAfterSave) {
+void requestStopAndSave(bool exitAfterSave);
+
+bool isGuiVisible(HWND hwnd) { return IsWindowVisible(hwnd) != FALSE; }
+
+void showGui(HWND hwnd) {
+  ShowWindow(hwnd, SW_SHOW);
+  SetForegroundWindow(hwnd);
+}
+
+void hideGui(HWND hwnd) { ShowWindow(hwnd, SW_HIDE); }
+
+void hideGuiToTray(HWND hwnd) {
+  hideGui(hwnd);
+  if (g_state != nullptr && !g_state->trayNoticeShown) {
+    trayIconShowBalloon(L"wrec", L"wrec is still running in the system tray.\n"
+                                 L"Use the tray icon to show or exit.");
+    g_state->trayNoticeShown = true;
+  }
+}
+
+void finishAppExit(HWND hwnd) {
+  trayIconRemove();
+  DestroyWindow(hwnd);
+}
+
+void requestAppExit(HWND hwnd) {
+  if (g_state == nullptr) {
+    return;
+  }
+  g_state->allowExit = true;
+  if (g_state->recording.load()) {
+    g_state->exitPending = true;
+    requestStopAndSave(false);
+  } else {
+    finishAppExit(hwnd);
+  }
+}
+
+void openOutputFolder(HWND hwnd) {
+  std::wstring dir = getWindowTextString(GetDlgItem(hwnd, IDC_OUTPUT_DIR));
+  if (dir.empty()) {
+    dir = defaultOutputDir();
+  }
+  ShellExecuteW(hwnd, L"explore", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void showTrayMenu(HWND hwnd, POINT pt) {
+  HMENU menu = CreatePopupMenu();
+  if (menu == nullptr) {
+    return;
+  }
+
+  const bool guiVisible = isGuiVisible(hwnd);
+  AppendMenuW(menu, MF_STRING, TRAY_TOGGLE_GUI,
+              guiVisible ? L"Hide GUI" : L"Show GUI");
+
+  const HWND console = GetConsoleWindow();
+  if (console != nullptr) {
+    const bool consoleVisible = IsWindowVisible(console) != FALSE;
+    AppendMenuW(menu, MF_STRING, TRAY_TOGGLE_CONSOLE,
+                consoleVisible ? L"Hide Console" : L"Show Console");
+  }
+
+  const bool recording = g_state != nullptr && g_state->recording.load();
+  AppendMenuW(menu, MF_STRING, TRAY_START_STOP,
+              recording ? L"Stop Recording" : L"Start Recording");
+  if (recording) {
+    AppendMenuW(menu, MF_STRING, TRAY_PAUSE_RESUME, L"Pause / Resume");
+  }
+
+  AppendMenuW(menu, MF_STRING, TRAY_OPEN_FOLDER, L"Open Output Folder");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, TRAY_EXIT, L"Exit");
+
+  SetForegroundWindow(hwnd);
+  TrackPopupMenu(menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd,
+                 nullptr);
+  PostMessageW(hwnd, WM_NULL, 0, 0);
+  DestroyMenu(menu);
+}
+
+void requestStopAndSave(bool exitAfterSave) {
   if (g_state == nullptr || !g_state->recording.load()) {
     return;
   }
   g_state->stopRequested.store(true);
-  g_state->closePending = closeAfterSave;
+  if (exitAfterSave) {
+    g_state->exitPending = true;
+    g_state->allowExit = true;
+  }
   setStatus(L"Stopping and saving...");
 }
 
@@ -530,12 +628,20 @@ BOOL WINAPI guiConsoleCtrlHandler(DWORD ctrlType) {
   switch (ctrlType) {
   case CTRL_C_EVENT:
   case CTRL_BREAK_EVENT:
-  case CTRL_CLOSE_EVENT:
     if (g_state->recording.load()) {
       requestStopAndSave(true);
       return TRUE;
     }
     return FALSE;
+  case CTRL_CLOSE_EVENT:
+    if (g_state->recording.load()) {
+      requestStopAndSave(true);
+      return TRUE;
+    }
+    if (const HWND console = GetConsoleWindow(); console != nullptr) {
+      ShowWindow(console, SW_HIDE);
+    }
+    return TRUE;
   default:
     return FALSE;
   }
@@ -635,9 +741,9 @@ void onRecordDone(HWND hwnd, RecordDonePayload *payload) {
   }
   setRecordingUi(hwnd, false);
   delete payload;
-  if (g_state->closePending) {
-    g_state->closePending = false;
-    PostMessageW(hwnd, WM_CLOSE, 0, 0);
+  if (g_state->exitPending) {
+    g_state->exitPending = false;
+    finishAppExit(hwnd);
   }
 }
 
@@ -678,6 +784,8 @@ void createChildControls(HWND hwnd) {
                reinterpret_cast<LPARAM>(L"horizontal"));
   SendMessageW(layoutCombo, CB_ADDSTRING, 0,
                reinterpret_cast<LPARAM>(L"vertical"));
+  SendMessageW(layoutCombo, CB_ADDSTRING, 0,
+               reinterpret_cast<LPARAM>(L"focus"));
   SendMessageW(layoutCombo, CB_SETCURSEL, 0, 0);
 
   createLabel(hwnd, L"Scale:", px(178), px(224), px(44), px(18));
@@ -853,6 +961,39 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     : L"Uninstall failed: " + utf8ToWide(result.error()));
       return 0;
     }
+    case TRAY_TOGGLE_GUI:
+      if (isGuiVisible(hwnd)) {
+        hideGuiToTray(hwnd);
+      } else {
+        showGui(hwnd);
+      }
+      return 0;
+    case TRAY_TOGGLE_CONSOLE: {
+      const HWND console = GetConsoleWindow();
+      if (console != nullptr) {
+        ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
+      }
+      return 0;
+    }
+    case TRAY_START_STOP:
+      if (g_state != nullptr && g_state->recording.load()) {
+        stopRecording();
+      } else {
+        startRecording(hwnd);
+      }
+      return 0;
+    case TRAY_PAUSE_RESUME:
+      if (g_state != nullptr && g_state->recording.load()) {
+        g_state->pendingHotkey.store(
+            static_cast<int>(HotkeyAction::PauseToggle));
+      }
+      return 0;
+    case TRAY_OPEN_FOLDER:
+      openOutputFolder(hwnd);
+      return 0;
+    case TRAY_EXIT:
+      requestAppExit(hwnd);
+      return 0;
     default:
       break;
     }
@@ -890,16 +1031,41 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     onRecordDone(hwnd, reinterpret_cast<RecordDonePayload *>(lParam));
     return 0;
   case WM_CLOSE:
-    if (g_state != nullptr && g_state->recording.load()) {
-      requestStopAndSave(true);
+    if (g_state != nullptr && g_state->allowExit) {
+      DestroyWindow(hwnd);
       return 0;
     }
-    DestroyWindow(hwnd);
+    hideGuiToTray(hwnd);
     return 0;
   case WM_DESTROY:
     PostQuitMessage(0);
     return 0;
   default:
+    if (msg == WM_TRAYICON) {
+      switch (LOWORD(lParam)) {
+      case WM_LBUTTONUP:
+      case WM_LBUTTONDBLCLK:
+        if (isGuiVisible(hwnd)) {
+          SetForegroundWindow(hwnd);
+        } else {
+          showGui(hwnd);
+        }
+        return 0;
+      case WM_RBUTTONUP: {
+        POINT pt{};
+        GetCursorPos(&pt);
+        showTrayMenu(hwnd, pt);
+        return 0;
+      }
+      default:
+        break;
+      }
+      return 0;
+    }
+    if (g_wmTaskbarCreated != 0 && msg == g_wmTaskbarCreated) {
+      trayIconInstall(hwnd, WM_TRAYICON);
+      return 0;
+    }
     break;
   }
   return DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -909,6 +1075,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 int runGui() {
   const HRESULT oleHr = OleInitialize(nullptr);
+
+  g_wmTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
   INITCOMMONCONTROLSEX icc{};
   icc.dwSize = sizeof(icc);
@@ -960,6 +1128,8 @@ int runGui() {
   ShowWindow(state.hwnd, SW_SHOW);
   UpdateWindow(state.hwnd);
 
+  trayIconInstall(state.hwnd, WM_TRAYICON);
+
   SetConsoleCtrlHandler(guiConsoleCtrlHandler, TRUE);
 
   MSG msg{};
@@ -974,6 +1144,8 @@ int runGui() {
   if (state.recordThread.joinable()) {
     state.recordThread.join();
   }
+
+  trayIconRemove();
 
   SetConsoleCtrlHandler(nullptr, FALSE);
   logSetGuiSink({});

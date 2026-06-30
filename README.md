@@ -7,9 +7,9 @@ wrec captures **top-level windows** (not the full desktop), composes them into o
 ## Features
 
 - **Window-targeted capture** — select by title, PID, or HWND
-- **Multi-window scenes** — grid, horizontal, vertical, or custom layouts in one MP4
+- **Multi-window scenes** — grid, horizontal, vertical, focus, or custom layouts in one MP4
 - **Covered windows** — Windows Graphics Capture when visible; `PrintWindow` when occluded
-- **CLI and GUI** — scriptable `wrec record` or `wrec gui` with multi-select
+- **CLI and GUI** — run `wrec` for the GUI, or script with `wrec record`
 - **Quality presets** — low through extreme; override FPS and bitrate anytime
 - **Global hotkeys** — stop, pause, and quit while recording
 - **PATH install** — `wrec install` copies to `%USERPROFILE%\.local\bin`
@@ -88,9 +88,12 @@ wrec -V
 
 ```powershell
 .\wrec.exe list
+.\wrec.exe
 .\wrec.exe gui
 .\wrec.exe r -t "Notepad" -d .\captures
 ```
+
+Running `wrec` with no command opens the GUI. Closing the window hides it to the system tray; use the tray icon to show the window again or exit completely.
 
 **From source** — see [docs/build.md](docs/build.md):
 

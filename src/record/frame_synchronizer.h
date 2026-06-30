@@ -1,5 +1,6 @@
 #pragma once
 
+#include "capture_perf.h"
 #include "capture_source.h"
 
 #include <memory>
@@ -7,6 +8,7 @@
 
 struct SyncedFrames {
   std::vector<SourceFrameView> frames;
+  SnapshotPerfMetrics perf{};
 };
 
 class FrameSynchronizer {

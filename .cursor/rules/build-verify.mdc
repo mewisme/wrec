@@ -30,6 +30,15 @@ Use the Shell tool with `working_directory` set to the project root (`F:/Project
 
 Default is Ninja + Release (matches CI). Use `.\build.ps1 -Clean` only when configure/cache issues are suspected.
 
+## Development versioning
+
+Every dev build gets a unique embedded version so `wrec -V` identifies the binary you tested.
+
+- **Default** (`.\build.ps1`): auto-stamps `1.0.0-dev.<yyyyMMdd-HHmmss>+<short-sha>` (or `+local` outside git).
+- **Release-like**: pass an explicit semver — `.\build.ps1 -Version 1.2.3` (same as CI/release).
+
+After a successful build, note the `Version:` line in build output when reporting results to the user.
+
 ## On failure
 
 - Read compiler/linker errors from the output

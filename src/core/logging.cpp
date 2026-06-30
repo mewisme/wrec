@@ -6,7 +6,6 @@
 #include <iostream>
 #include <sstream>
 
-
 std::string wideToUtf8(const std::wstring &wide);
 
 namespace {

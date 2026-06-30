@@ -187,7 +187,8 @@ Result<ParsedCommand> parseRecordArgs(ParsedCommand cmd, int argc,
             parseLayoutKind(requireValue(i, argc, argv, "--layout"));
         if (!layout.isOk()) {
           return Result<ParsedCommand>::fail(
-              "--layout expects auto, grid, horizontal, vertical, or custom");
+              "--layout expects auto, grid, horizontal, vertical, focus, or "
+              "custom");
         }
         cmd.record.layout = layout.value();
       } else if (arg == L"--canvas") {
@@ -348,12 +349,13 @@ void printUsage() {
       << "wrec " << wrecVersion()
       << " - Windows CLI screen recorder\n\n"
          "Usage:\n"
+         "  wrec [gui]             Open GUI (default)\n"
          "  wrec list|l [-a] [-j] [-v]\n"
          "  wrec record|rec|r (-w <HWND> | -p <PID> | -t <text> | "
          "-S <spec>) [-o <file.mp4>] [options]\n"
-         "  wrec gui\n"
          "  wrec install [-d <dir>] [-v]\n"
          "  wrec uninstall [-d <dir>] [-v]\n"
+         "  wrec help, -h, --help\n"
          "  wrec -V, --version\n\n"
          "List options:\n"
          "  -a, --all              Include tool/invisible/shell windows\n"
@@ -370,7 +372,7 @@ void printUsage() {
          "  -v, --verbose          Verbose logging\n"
          "  -S, --source <spec>    Custom placement: "
          "hwnd=...,x=...,y=...,w=...,h=[,scale=fit|fill|stretch]\n"
-         "      --layout <mode>    auto, grid, horizontal, vertical, "
+         "      --layout <mode>    auto, grid, horizontal, vertical, focus, "
          "custom (default: auto)\n"
          "      --canvas <WxH>     Output canvas size (required for "
          "custom layout)\n"
@@ -392,6 +394,7 @@ void printUsage() {
          "Multi-window examples:\n"
          "  wrec r -t Chrome -t \"Visual Studio Code\" -o session.mp4\n"
          "  wrec r -t Chrome -t Notepad --layout horizontal -o dual.mp4\n"
+         "  wrec r -t Chrome -t Notepad --layout focus -o focus.mp4\n"
          "  wrec r -w 0x123 -w 0x456 --layout grid -o grid.mp4\n"
          "  wrec r --canvas 1920x1080 -S hwnd=0x123,x=0,y=0,w=960,"
          "h=540 -o custom.mp4\n\n"
@@ -409,7 +412,7 @@ void printUsage() {
 Result<ParsedCommand> parseCommandLine(int argc, wchar_t *argv[]) {
   ParsedCommand cmd;
   if (argc < 2) {
-    cmd.kind = ParsedCommand::Kind::Help;
+    cmd.kind = ParsedCommand::Kind::Gui;
     return Result<ParsedCommand>::ok(std::move(cmd));
   }
 
@@ -472,9 +475,45 @@ BOOL WINAPI cliConsoleCtrlHandler(DWORD ctrlType) {
   }
 }
 
+void configureLogging(const ParsedCommand &command) {
+  switch (command.kind) {
+  case ParsedCommand::Kind::List:
+    logSetVerbose(command.list.verbose);
+    logSetJson(command.list.json);
+    break;
+  case ParsedCommand::Kind::Record:
+    logSetVerbose(command.record.verbose);
+    logSetJson(command.record.json);
+    break;
+  case ParsedCommand::Kind::Install:
+  case ParsedCommand::Kind::Uninstall:
+    logSetVerbose(command.install.verbose);
+    break;
+  case ParsedCommand::Kind::Gui:
+    logSetVerbose(true);
+    logSetJson(false);
+    break;
+  default:
+    logSetVerbose(false);
+    logSetJson(false);
+    break;
+  }
+}
+
+void logAppVersion() {
+  if (logIsJson()) {
+    logJsonEvent("version",
+                 "\"version\":\"" + std::string(wrecVersion()) + '"');
+  } else {
+    logMessage(LogLevel::Info, std::string("wrec ") + wrecVersion());
+  }
+}
+
 } // namespace
 
 int runCommand(const ParsedCommand &command) {
+  configureLogging(command);
+  logAppVersion();
   switch (command.kind) {
   case ParsedCommand::Kind::Help:
     printUsage();
@@ -483,8 +522,6 @@ int runCommand(const ParsedCommand &command) {
     printVersion();
     return 0;
   case ParsedCommand::Kind::List: {
-    logSetVerbose(command.list.verbose);
-    logSetJson(command.list.json);
     const auto result = listWindows(command.list);
     if (!result.isOk()) {
       logMessage(LogLevel::Error, result.error());
@@ -493,8 +530,6 @@ int runCommand(const ParsedCommand &command) {
     return 0;
   }
   case ParsedCommand::Kind::Record: {
-    logSetVerbose(command.record.verbose);
-    logSetJson(command.record.json);
     std::atomic<bool> stopRequested{false};
     g_cliStopRequested = &stopRequested;
     SetConsoleCtrlHandler(cliConsoleCtrlHandler, TRUE);
@@ -508,7 +543,6 @@ int runCommand(const ParsedCommand &command) {
     return 0;
   }
   case ParsedCommand::Kind::Install: {
-    logSetVerbose(command.install.verbose);
     const auto result = installToPath(command.install);
     if (!result.isOk()) {
       logMessage(LogLevel::Error, result.error());
@@ -517,7 +551,6 @@ int runCommand(const ParsedCommand &command) {
     return 0;
   }
   case ParsedCommand::Kind::Uninstall: {
-    logSetVerbose(command.install.verbose);
     const auto result = uninstallFromPath(command.install);
     if (!result.isOk()) {
       logMessage(LogLevel::Error, result.error());

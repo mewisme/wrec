@@ -149,6 +149,49 @@ void drawCursorAt(std::vector<uint8_t> &frameBuffer, uint32_t width,
   }
 }
 
+bool cursorNearAnySource(const POINT &pt,
+                         const std::vector<SceneCursorSource> &sources) {
+  for (const SceneCursorSource &src : sources) {
+    if (!src.hwnd) {
+      continue;
+    }
+    RECT rect{};
+    if (!GetWindowRect(src.hwnd, &rect)) {
+      continue;
+    }
+    if (pt.x >= rect.left && pt.y >= rect.top && pt.x < rect.right &&
+        pt.y < rect.bottom) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool cursorOverlayNeedsRedraw(bool enabled,
+                              const std::vector<SceneCursorSource> &sources,
+                              CursorOverlayCache &cache) {
+  if (!enabled || sources.empty()) {
+    return false;
+  }
+
+  CURSORINFO ci{};
+  ci.cbSize = sizeof(ci);
+  if (!GetCursorInfo(&ci)) {
+    return cache.lastDrawn;
+  }
+
+  const bool showing = (ci.flags & CURSOR_SHOWING) != 0;
+  const bool cursorNear = showing && cursorNearAnySource(ci.ptScreenPos, sources);
+  const bool changed =
+      ci.hCursor != cache.cursor || ci.ptScreenPos.x != cache.lastScreenPos.x ||
+      ci.ptScreenPos.y != cache.lastScreenPos.y || showing != cache.lastShowing ||
+      cursorNear != cache.lastDrawn;
+
+  cache.lastScreenPos = ci.ptScreenPos;
+  cache.lastShowing = showing;
+  return changed;
+}
+
 void compositeCursor(std::vector<uint8_t> &frameBuffer, uint32_t width,
                      uint32_t height, const CursorOverlayOptions &options) {
   if (!options.enabled || !options.targetWindow) {
@@ -190,7 +233,8 @@ void compositeCursor(std::vector<uint8_t> &frameBuffer, uint32_t width,
 
 void compositeCursorOnScene(std::vector<uint8_t> &frameBuffer, uint32_t width,
                             uint32_t height, bool enabled,
-                            const std::vector<SceneCursorSource> &sources) {
+                            const std::vector<SceneCursorSource> &sources,
+                            CursorOverlayCache &cache) {
   if (!enabled || sources.empty()) {
     return;
   }
@@ -201,18 +245,37 @@ void compositeCursorOnScene(std::vector<uint8_t> &frameBuffer, uint32_t width,
     return;
   }
 
-  std::vector<uint8_t> cursorPixels;
-  int cursorW = 0;
-  int cursorH = 0;
-  int hotX = 0;
-  int hotY = 0;
-  if (!readCursorBitmap(ci.hCursor, cursorPixels, cursorW, cursorH, hotX,
-                        hotY)) {
+  bool nearAnySource = false;
+  for (const SceneCursorSource &src : sources) {
+    if (!src.hwnd) {
+      continue;
+    }
+    RECT rect{};
+    if (!GetWindowRect(src.hwnd, &rect)) {
+      continue;
+    }
+    if (ci.ptScreenPos.x >= rect.left && ci.ptScreenPos.y >= rect.top &&
+        ci.ptScreenPos.x < rect.right && ci.ptScreenPos.y < rect.bottom) {
+      nearAnySource = true;
+      break;
+    }
+  }
+  if (!nearAnySource) {
+    cache.lastDrawn = false;
     return;
   }
 
-  const int cursorX = ci.ptScreenPos.x - hotX;
-  const int cursorY = ci.ptScreenPos.y - hotY;
+  if (cache.cursor != ci.hCursor) {
+    cache.cursor = ci.hCursor;
+    if (!readCursorBitmap(ci.hCursor, cache.pixels, cache.width, cache.height,
+                          cache.hotX, cache.hotY)) {
+      cache.cursor = nullptr;
+      return;
+    }
+  }
+
+  const int cursorX = ci.ptScreenPos.x - cache.hotX;
+  const int cursorY = ci.ptScreenPos.y - cache.hotY;
 
   for (auto it = sources.rbegin(); it != sources.rend(); ++it) {
     const SceneCursorSource &src = *it;
@@ -251,8 +314,10 @@ void compositeCursorOnScene(std::vector<uint8_t> &frameBuffer, uint32_t width,
     const int canvasTop =
         src.destY + blit.offsetY + static_cast<int>(srcPy * blit.scaleY);
 
-    drawCursorAt(frameBuffer, width, height, cursorPixels, cursorW, cursorH,
-                 canvasLeft, canvasTop);
+    drawCursorAt(frameBuffer, width, height, cache.pixels, cache.width,
+                 cache.height, canvasLeft, canvasTop);
+    cache.lastDrawn = true;
     return;
   }
+  cache.lastDrawn = false;
 }

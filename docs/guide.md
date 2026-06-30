@@ -21,8 +21,11 @@ The GUI also has **Install** / **Uninstall** controls at the bottom of the windo
 Launch:
 
 ```powershell
+wrec
 wrec gui
 ```
+
+Both open the same GUI. With no subcommand, `wrec` defaults to the GUI.
 
 ### Workflow
 
@@ -38,9 +41,28 @@ wrec gui
 
 Custom per-source placement (`--source` / `--canvas`) is CLI-only; the GUI uses automatic layouts.
 
+### System tray
+
+When the GUI is running, a tray icon stays in the notification area.
+
+- **Close the window** — hides the GUI to the tray; recording and hotkeys keep working.
+- **First hide** — shows a one-time balloon: *wrec is still running in the system tray.*
+- **Left-click the tray icon** — shows the GUI (or brings it to the foreground if already visible).
+- **Right-click** — context menu:
+  - Show GUI / Hide GUI
+  - Show Console / Hide Console (if a console is attached)
+  - Start Recording / Stop Recording
+  - Pause / Resume (while recording)
+  - Open Output Folder
+  - Exit — stops recording gracefully if active, then quits
+
+To fully exit, use **Exit** from the tray menu (or stop recording first, then exit). Closing the window does not quit the app.
+
 ### Closing while recording
 
-If you close the window or press **Ctrl+C** in the terminal that launched the GUI while a session is active, wrec stops gracefully: it finalizes the file first, then exits. The status bar shows **Stopping and saving…** during this.
+Closing the GUI window hides it to the tray; recording continues. Use the tray **Exit** item (or Ctrl+Alt+Q) to stop, finalize the MP4, and quit.
+
+If you close the **console** while recording, wrec stops gracefully: it finalizes the file first, then exits. The status bar shows **Stopping and saving…** during this.
 
 ---
 

@@ -149,6 +149,9 @@ Status MfEncoder::writeFrame(const std::vector<uint8_t> &bgra,
     return Status::fail("Encoder not opened");
   }
 
+  // ponytail: MFCreateMemoryBuffer + MFCreateSample every frame; reuse needs
+  // verified WriteSample copy semantics (may retain sample async) — defer pass
+  // 2
   ComGuard<IMFMediaBuffer> buffer;
   const DWORD bufferSize = static_cast<DWORD>(width_ * height_ * 4);
   const HRESULT hrBuf = MFCreateMemoryBuffer(bufferSize, buffer.put());
