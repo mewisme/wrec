@@ -18,14 +18,6 @@ wrec captures **top-level windows** (not the full desktop), composes them into o
 
 Windows x64 only.
 
-### Winget
-
-```powershell
-winget install Mew.Wrec
-```
-
-Package identifier: `Mew.Wrec`. First GUI launch creates desktop and Start menu shortcuts named **wrec** (winget portable installs do not support shortcut manifests).
-
 ### Scoop
 
 Add this repo as a bucket (one-time), then install:
@@ -50,6 +42,12 @@ Latest release:
 
 ```powershell
 irm https://raw.githubusercontent.com/mewisme/wrec/main/install.ps1 | iex
+```
+
+From **cmd**:
+
+```cmd
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/mewisme/wrec/main/install.ps1 | iex"
 ```
 
 Specific version:
@@ -82,7 +80,7 @@ Check version and how it was installed:
 wrec -V
 ```
 
-`Installed via` is detected from the running executable path (e.g. `Scoop`, `Winget`, `manual PATH install`, `portable ZIP`).
+`Installed via` is detected from the running executable path (e.g. `Scoop`, `manual PATH install`, `portable ZIP`).
 
 ## Quick start
 

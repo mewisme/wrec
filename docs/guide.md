@@ -8,7 +8,7 @@ wrec install --dir D:\tools\bin
 wrec uninstall
 ```
 
-Manual ZIP / PowerShell installs only — not available when wrec was installed via winget or scoop.
+Manual ZIP / PowerShell installs only — not available when wrec was installed via scoop.
 
 `wrec install` copies the executable to your user PATH, and creates **wrec** shortcuts on the desktop and in the Start menu. `wrec uninstall` removes them.
 

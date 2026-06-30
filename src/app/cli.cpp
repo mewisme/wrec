@@ -402,7 +402,7 @@ void printUsage() {
          "  -d, --dir <path>       Install directory (default: "
          "%USERPROFILE%\\.local\\bin)\n"
          "  -v, --verbose          Verbose logging\n"
-         "  (manual ZIP only; not available for winget/scoop installs)\n\n"
+         "  (manual ZIP only; not available for scoop installs)\n\n"
          "Hotkeys (when --hotkeys on):\n"
          "  Ctrl+Alt+S  Stop recording (or Start if --start-paused)\n"
          "  Ctrl+Alt+P  Pause/resume\n"

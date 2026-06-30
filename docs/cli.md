@@ -19,9 +19,9 @@ wrec -V
 wrec --version
 ```
 
-Shows the ASCII banner, version, license, and install source (`Winget`, `Scoop`, `manual PATH install`, `portable ZIP`).
+Shows the ASCII banner, version, license, and install source (`Scoop`, `manual PATH install`, `portable ZIP`).
 
-`wrec install` and `wrec uninstall` are for manual ZIP installs only (not winget/scoop).
+`wrec install` and `wrec uninstall` are for manual ZIP installs only (not scoop).
 
 ---
 

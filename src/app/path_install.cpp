@@ -127,7 +127,7 @@ Result<std::wstring> knownFolderPath(REFKNOWNFOLDERID id) {
   const HRESULT hr = SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, nullptr, &path);
   if (FAILED(hr) || path == nullptr) {
     return Result<std::wstring>::fail("SHGetKnownFolderPath failed: " +
-                                     formatHresult(hr));
+                                      formatHresult(hr));
   }
   std::wstring result(path);
   CoTaskMemFree(path);
@@ -241,9 +241,6 @@ const char *detectInstallSource() {
       path.find(L"\\scoop\\shims\\wrec.exe") != std::wstring::npos) {
     return "scoop";
   }
-  if (path.find(L"\\microsoft\\winget\\") != std::wstring::npos) {
-    return "winget";
-  }
 
   const std::wstring destExe = defaultInstallDir() + L"\\wrec.exe";
   if (equalsPathIgnoreCase(pathResult.value(), destExe)) {
@@ -254,9 +251,6 @@ const char *detectInstallSource() {
 }
 
 const char *installSourceLabel(const char *source) {
-  if (std::strcmp(source, "winget") == 0) {
-    return "Winget";
-  }
   if (std::strcmp(source, "scoop") == 0) {
     return "Scoop";
   }
@@ -271,7 +265,7 @@ const char *installSourceLabel(const char *source) {
 
 Status rejectIfPackageManaged(const char *command) {
   const char *src = detectInstallSource();
-  if (std::strcmp(src, "winget") == 0 || std::strcmp(src, "scoop") == 0) {
+  if (std::strcmp(src, "scoop") == 0) {
     return Status::fail(std::string("wrec ") + command +
                         " is for manual ZIP installs only; this copy was "
                         "installed via " +

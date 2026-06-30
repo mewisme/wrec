@@ -46,24 +46,18 @@ jobs:
             dist/wrec-v${{ steps.version.outputs.version }}-windows-amd64.zip
             dist/SHA256SUMS
             dist/wrec.json
-            dist/winget/manifests/m/Mew/Wrec/${{ steps.version.outputs.version }}/Mew.Wrec.yaml
-            dist/winget/manifests/m/Mew/Wrec/${{ steps.version.outputs.version }}/Mew.Wrec.installer.yaml
-            dist/winget/manifests/m/Mew/Wrec/${{ steps.version.outputs.version }}/Mew.Wrec.locale.en-US.yaml
           generate_release_notes: true
 
-      - name: Update Scoop and Winget manifests on main
+      - name: Update Scoop manifest on main
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           VERSION="${{ steps.version.outputs.version }}"
           cp bucket/wrec.json /tmp/wrec-bucket.json
-          cp -r "packaging/winget/manifests/m/Mew/Wrec/${VERSION}" "/tmp/winget-${VERSION}"
           git fetch origin main
           git checkout main
           cp /tmp/wrec-bucket.json bucket/wrec.json
-          mkdir -p "packaging/winget/manifests/m/Mew/Wrec/${VERSION}"
-          cp -r "/tmp/winget-${VERSION}/." "packaging/winget/manifests/m/Mew/Wrec/${VERSION}/"
-          git add bucket/wrec.json "packaging/winget/manifests/m/Mew/Wrec/${VERSION}"
-          git diff --staged --quiet || git commit -m "chore(release): update scoop and winget manifests for v${VERSION}"
+          git add bucket/wrec.json
+          git diff --staged --quiet || git commit -m "chore(release): update scoop manifest for v${VERSION}"
           git push origin main

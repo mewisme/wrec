@@ -1121,7 +1121,7 @@ int runGui() {
 
   if (const auto exe = currentExePath(); exe.isOk()) {
     const char *src = detectInstallSource();
-    if (std::strcmp(src, "winget") == 0 || std::strcmp(src, "portable") == 0) {
+    if (std::strcmp(src, "portable") == 0) {
       ensureAppShortcuts(exe.value());
     }
   }
