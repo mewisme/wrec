@@ -21,7 +21,22 @@ wrec --version
 
 Shows the ASCII banner, version, license, and install source (`Scoop`, `manual PATH install`, `portable ZIP`).
 
-`wrec install` and `wrec uninstall` are for manual ZIP installs only (not scoop).
+`wrec install` and `wrec uninstall` are for manual ZIP / PowerShell installs only (not Scoop).
+
+```powershell
+wrec install [-d <dir>] [-v]
+wrec uninstall [-d <dir>] [-v]
+```
+
+Default install directory: `%USERPROFILE%\.local\bin`. `-d` must match the directory used at install time.
+
+| Installed via | Uninstall |
+|---------------|-----------|
+| Scoop | `scoop uninstall wrec` |
+| PowerShell script / `wrec install` | `wrec uninstall` (or GUI **Uninstall**) |
+| Portable ZIP (never installed) | Delete `wrec.exe` and remove `wrec.lnk` shortcuts if created |
+
+Restart your terminal after `wrec uninstall` so PATH changes take effect.
 
 ---
 

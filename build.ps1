@@ -56,11 +56,8 @@ function Find-Ninja {
   $bundled = Join-Path $install 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe'
   if (Test-Path $bundled) { return $bundled }
   throw @'
-ninja not found. Install it once, then re-run:
-
-  winget install Ninja-build.Ninja
-
-Or use: .\build.ps1 -Generator VisualStudio
+ninja not found. Install from https://github.com/ninja-build/ninja/releases
+or use: .\build.ps1 -Generator VisualStudio
 '@
 }
 

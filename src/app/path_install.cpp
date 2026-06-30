@@ -120,6 +120,35 @@ Status copyCurrentExeTo(const std::wstring &destExe) {
   return Status::ok();
 }
 
+void deleteWrecLnk(const std::wstring &folder) {
+  if (folder.empty()) {
+    return;
+  }
+  DeleteFileW((folder + L"\\wrec.lnk").c_str());
+}
+
+void deleteWrecLnkUnderStartMenu(const std::wstring &root) {
+  if (root.empty()) {
+    return;
+  }
+  deleteWrecLnk(root);
+  std::error_code ec;
+  const fs::path base(root);
+  if (!fs::is_directory(base, ec)) {
+    return;
+  }
+  // ponytail: name-only scan under Start Menu; upgrade: filter by IShellLink
+  // target
+  for (fs::recursive_directory_iterator it(
+           base, fs::directory_options::skip_permission_denied, ec);
+       it != fs::recursive_directory_iterator(); ++it) {
+    if (it->is_regular_file(ec) &&
+        _wcsicmp(it->path().filename().c_str(), L"wrec.lnk") == 0) {
+      DeleteFileW(it->path().c_str());
+    }
+  }
+}
+
 } // namespace
 
 Result<std::wstring> knownFolderPath(REFKNOWNFOLDERID id) {
@@ -206,13 +235,22 @@ Status ensureAppShortcuts(const std::wstring &exePath) {
 }
 
 Status removeAppShortcuts() {
-  const auto desktop = knownFolderPath(FOLDERID_Desktop);
-  if (desktop.isOk()) {
-    DeleteFileW((desktop.value() + L"\\wrec.lnk").c_str());
+  static const KNOWNFOLDERID kDesktopFolders[] = {
+      FOLDERID_Desktop,
+      FOLDERID_PublicDesktop,
+  };
+  for (const auto id : kDesktopFolders) {
+    if (const auto folder = knownFolderPath(id); folder.isOk()) {
+      deleteWrecLnk(folder.value());
+    }
   }
-  const auto programs = knownFolderPath(FOLDERID_Programs);
-  if (programs.isOk()) {
-    DeleteFileW((programs.value() + L"\\wrec.lnk").c_str());
+  if (const auto programs = knownFolderPath(FOLDERID_Programs);
+      programs.isOk()) {
+    deleteWrecLnkUnderStartMenu(programs.value());
+  }
+  if (const auto common = knownFolderPath(FOLDERID_CommonPrograms);
+      common.isOk()) {
+    deleteWrecLnkUnderStartMenu(common.value());
   }
   return Status::ok();
 }
@@ -332,27 +370,30 @@ Status uninstallFromPath(const InstallOptions &options) {
   const std::wstring dir =
       normalizeDir(options.dir.empty() ? defaultInstallDir() : options.dir);
   const std::wstring destExe = dir + L"\\wrec.exe";
+  std::string error;
 
   const auto pathResult = readUserPath();
   if (!pathResult.isOk()) {
-    return Status::fail(pathResult.error());
-  }
+    error = pathResult.error();
+  } else {
+    auto parts = splitPathList(pathResult.value());
+    const size_t before = parts.size();
+    parts.erase(std::remove_if(parts.begin(), parts.end(),
+                               [&](const std::wstring &p) {
+                                 return equalsPathIgnoreCase(p, dir);
+                               }),
+                parts.end());
 
-  auto parts = splitPathList(pathResult.value());
-  const size_t before = parts.size();
-  parts.erase(std::remove_if(parts.begin(), parts.end(),
-                             [&](const std::wstring &p) {
-                               return equalsPathIgnoreCase(p, dir);
-                             }),
-              parts.end());
-
-  if (parts.size() != before) {
-    if (auto st = writeUserPath(joinPathList(parts)); !st.isOk()) {
-      return st;
+    if (parts.size() != before) {
+      if (auto st = writeUserPath(joinPathList(parts)); !st.isOk()) {
+        error = st.error();
+      } else {
+        logMessage(LogLevel::Info,
+                   "Removed from user PATH: " + wideToUtf8(dir));
+      }
+    } else if (options.verbose) {
+      logMessage(LogLevel::Verbose, "Install directory was not on user PATH");
     }
-    logMessage(LogLevel::Info, "Removed from user PATH: " + wideToUtf8(dir));
-  } else if (options.verbose) {
-    logMessage(LogLevel::Verbose, "Install directory was not on user PATH");
   }
 
   const auto running = currentExePath();
@@ -365,7 +406,9 @@ Status uninstallFromPath(const InstallOptions &options) {
                  "Skipped deleting " + wideToUtf8(destExe) +
                      " (currently running). Delete manually after exit.");
     } else if (!DeleteFileW(destExe.c_str())) {
-      return Status::fail("Failed to delete " + wideToUtf8(destExe));
+      if (error.empty()) {
+        error = "Failed to delete " + wideToUtf8(destExe);
+      }
     } else {
       logMessage(LogLevel::Info, "Deleted " + wideToUtf8(destExe));
     }
@@ -373,6 +416,10 @@ Status uninstallFromPath(const InstallOptions &options) {
 
   removeAppShortcuts();
   logMessage(LogLevel::Info, "Removed desktop and Start menu shortcuts.");
+
+  if (!error.empty()) {
+    return Status::fail(error);
+  }
 
   logMessage(LogLevel::Info, "Uninstall complete. Restart your terminal.");
   return Status::ok();

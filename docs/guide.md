@@ -1,20 +1,59 @@
 # User guide
 
-## Install on PATH
+## Installation and uninstallation
+
+Run `wrec -V` to see **Installed via** (`Scoop`, `manual PATH install`, or `portable ZIP`).
+
+### Scoop
+
+```powershell
+scoop bucket add mew https://github.com/mewisme/wrec
+scoop install wrec
+```
+
+Uninstall:
+
+```powershell
+scoop uninstall wrec
+```
+
+Removes the app, shim, and **wrec** shortcuts. Optional: `scoop bucket rm mew`.
+
+`wrec install` / `wrec uninstall` do not apply to Scoop installs.
+
+### PowerShell or manual PATH install
+
+The [install.ps1](https://github.com/mewisme/wrec/blob/main/install.ps1) script downloads a release and runs `wrec install`. You can also install from an extracted ZIP:
 
 ```powershell
 wrec install                    # → %USERPROFILE%\.local\bin
 wrec install --dir D:\tools\bin
-wrec uninstall
 ```
 
-Manual ZIP / PowerShell installs only — not available when wrec was installed via scoop.
+`wrec install` copies the executable to your user PATH and creates **wrec** shortcuts on the desktop and in the Start menu.
 
-`wrec install` copies the executable to your user PATH, and creates **wrec** shortcuts on the desktop and in the Start menu. `wrec uninstall` removes them.
+Uninstall:
+
+```powershell
+wrec uninstall
+wrec uninstall -d D:\tools\bin  # custom install dir
+```
+
+Or use **Uninstall** at the bottom of the GUI. Removes the executable, PATH entry, and shortcuts.
 
 Restart your terminal after install or uninstall so PATH changes take effect.
 
-The GUI also has **Install** / **Uninstall** controls at the bottom of the window.
+### Portable (extracted ZIP, no install)
+
+Extract `wrec.exe` and run it directly — no PATH changes.
+
+The first GUI launch may create **wrec** shortcuts on the desktop and in the Start menu.
+
+Uninstall:
+
+1. Quit wrec (**Exit** from the tray menu if the GUI is running).
+2. Delete the folder containing `wrec.exe`.
+3. Remove **wrec** shortcuts from the desktop and Start menu (`wrec.lnk`) if present.
 
 ---
 

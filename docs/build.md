@@ -6,11 +6,7 @@
 - Visual Studio 2022+ (or Build Tools) with **Desktop development with C++**
 - [Ninja](https://ninja-build.org/) (optional; matches CI)
 
-Install Ninja once:
-
-```powershell
-winget install Ninja-build.Ninja
-```
+Install Ninja from [ninja-build.org](https://ninja-build.org/) or [GitHub releases](https://github.com/ninja-build/ninja/releases), or use `.\build.ps1 -Generator VisualStudio` (bundled with VS).
 
 ## Build commands
 
